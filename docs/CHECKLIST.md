@@ -32,7 +32,7 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 
 ## Fase 1: API VPS
 
-- [ ] TK-020 Skema basis data dan migrasi (dep: TK-001)
+- [x] TK-020 Skema basis data dan migrasi (dep: TK-001)
 - [ ] TK-021 Autentikasi Google, allowlist, sesi, Turnstile (dep: TK-020, TK-003)
 - [ ] TK-022 Persetujuan dan pemberitahuan privasi (dep: TK-021, TK-060)
 - [ ] TK-023 Alur unggah multipart ke R2 (dep: TK-020, TK-021, TK-022, TK-003)
