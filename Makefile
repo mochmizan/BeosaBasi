@@ -19,7 +19,7 @@ dev-api:
 	python scripts/dev_up.py --api-only
 
 dev-web:
-	@echo TODO(TK-002/TK-040): run Vite dev server against mock API.
+	python scripts/dev_web.py
 
 dev-worker:
 	@echo TODO(TK-002/TK-030): run worker loop (incl. --fake mode).

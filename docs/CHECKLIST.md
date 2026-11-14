@@ -54,7 +54,7 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 
 ## Fase 1: Web
 
-- [ ] TK-040 Scaffold web dan klien API (dep: TK-001)
+- [x] TK-040 Scaffold web dan klien API (dep: TK-001)
 - [ ] TK-041 Login dan persetujuan (dep: TK-040, TK-022)
 - [ ] TK-042 Unggah dapat dilanjutkan dan kuota (dep: TK-041, TK-023, TK-024)
 - [ ] TK-043 Daftar job dan halaman status (dep: TK-042)
