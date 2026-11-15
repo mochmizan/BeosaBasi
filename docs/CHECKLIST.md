@@ -35,13 +35,13 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 - [x] TK-020 Skema basis data dan migrasi (dep: TK-001)
 - [ ] TK-021 Autentikasi Google, allowlist, sesi, Turnstile (dep: TK-020, TK-003)
 - [ ] TK-022 Persetujuan dan pemberitahuan privasi (dep: TK-021, TK-060)
-- [ ] TK-023 Alur unggah multipart ke R2 (dep: TK-020, TK-021, TK-022, TK-003)
-- [ ] TK-024 Siklus job, kuota, dan pembatasan (dep: TK-023)
-- [ ] TK-025 API pekerja klaim, detak, hasil, gagal (dep: TK-024)
-- [ ] TK-026 API transkrip segmen, penyuntingan, pembicara (dep: TK-025)
-- [ ] TK-027 Ekspor TXT, SRT, VTT, DOCX (dep: TK-026)
-- [ ] TK-028 Retensi dan penghapusan K4 (dep: TK-024, TK-026)
-- [ ] TK-029 Observabilitas dan metrik (dep: TK-025)
+- [x] TK-023 Alur unggah multipart ke R2 (dep: TK-020, TK-021, TK-022, TK-003)
+- [x] TK-024 Siklus job, kuota, dan pembatasan (dep: TK-023)
+- [x] TK-025 API pekerja klaim, detak, hasil, gagal (dep: TK-024)
+- [x] TK-026 API transkrip segmen, penyuntingan, pembicara (dep: TK-025)
+- [x] TK-027 Ekspor TXT, SRT, VTT, DOCX (dep: TK-026)
+- [x] TK-028 Retensi dan penghapusan K4 (dep: TK-024, TK-026)
+- [x] TK-029 Observabilitas dan metrik (dep: TK-025)
 
 ## Fase 1: Pekerja laptop
 

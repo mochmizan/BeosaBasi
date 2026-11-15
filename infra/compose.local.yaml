@@ -1,5 +1,5 @@
-# Local development stack (TK-002). Dev-only: fake API + Garage as the
-# S3-compatible R2 stand-in (Garage supports multipart upload like R2).
+# Local development stack (TK-002). Dev-only: fake demo API + the real
+# anonymous backend, with Garage as the S3-compatible R2 stand-in.
 # Production shape (Caddy, backups, real R2, real secrets) arrives in TK-004.
 # All credentials below are local-dev only and never used in production.
 name: beosabasi-local
@@ -10,9 +10,28 @@ services:
       context: ../apps/api
       dockerfile: Dockerfile
     environment:
+      # Keep the TK-002 in-memory `/dev/jobs` demo available alongside the
+      # real uploads/jobs/worker routers.
       BEOSABASI_FAKE: "1"
+      BEOSABASI_DB_PATH: /data/beosabasi.db
+      BEOSABASI_WORKER_TOKEN: dev-worker-token
+      BEOSABASI_ADMIN_TOKEN: dev-admin-token
+      BEOSABASI_COOKIE_SECURE: "0"
+      BEOSABASI_TRUST_PROXY: "0"
+      BEOSABASI_IP_HASH_SALT: dev-only-salt
+      BEOSABASI_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      S3_ENDPOINT: http://s3.localhost:3900
+      S3_REGION: garage
+      S3_BUCKET: beosabasi-dev
+      S3_KEY_ID: beosabasidevkey01
+      S3_KEY_SECRET: beosabasidevsecret000000000000000001
+      S3_FORCE_PATH_STYLE: "1"
     ports:
       - "8000:8000"
+    extra_hosts:
+      # One hostname signable and reachable from both the browser (loopback)
+      # and the API container (host gateway). Keeps presigned URLs valid.
+      - "s3.localhost:host-gateway"
     volumes:
       - api-data:/data
     depends_on:
