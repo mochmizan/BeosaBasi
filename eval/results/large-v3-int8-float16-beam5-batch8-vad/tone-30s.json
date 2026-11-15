@@ -1,0 +1,23 @@
+{
+  "clip": "tone-30s",
+  "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\tone-30s.wav",
+  "duration_seconds": 30.0,
+  "load_seconds": 17.044538,
+  "repeats": [
+    {
+      "seconds": 0.061001,
+      "xrt": 491.7936,
+      "peak_vram_mb": null,
+      "peak_temp_c": null,
+      "segment_count": 0,
+      "segments": []
+    }
+  ],
+  "median_seconds": 0.061001,
+  "worst_seconds": 0.061001,
+  "median_xrt": 491.7952164718611,
+  "worst_xrt": 491.7952164718611,
+  "peak_vram_mb": null,
+  "peak_temp_c": null,
+  "segment_count": 0
+}

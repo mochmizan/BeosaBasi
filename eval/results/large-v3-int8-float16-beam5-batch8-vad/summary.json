@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "created_at": "2026-11-15T10:49:19.455035+00:00",
+  "backend": "faster-whisper",
+  "folder": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips",
+  "config": {
+    "model": "large-v3",
+    "compute_type": "int8_float16",
+    "beam_size": 5,
+    "batch_size": 8,
+    "vad": true,
+    "language": "id",
+    "device": "cuda"
+  },
+  "config_slug": "large-v3-int8-float16-beam5-batch8-vad",
+  "repeat": 1,
+  "load_seconds": 17.044538,
+  "clips": [
+    {
+      "clip": "noise-30s",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\noise-30s.wav",
+      "duration_seconds": 30.0,
+      "load_seconds": 17.044538,
+      "repeats": [
+        {
+          "seconds": 0.441979,
+          "xrt": 67.8765,
+          "peak_vram_mb": 1993,
+          "peak_temp_c": 50,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 0.441979,
+      "worst_seconds": 0.441979,
+      "median_xrt": 67.87652807033818,
+      "worst_xrt": 67.87652807033818,
+      "peak_vram_mb": 1993,
+      "peak_temp_c": 50,
+      "segment_count": 0
+    },
+    {
+      "clip": "noise-60min",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\noise-60min.wav",
+      "duration_seconds": 3600.0,
+      "load_seconds": 17.044538,
+      "repeats": [
+        {
+          "seconds": 17.468301,
+          "xrt": 206.0876,
+          "peak_vram_mb": 1993,
+          "peak_temp_c": 50,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 17.468301,
+      "worst_seconds": 17.468301,
+      "median_xrt": 206.08758688094508,
+      "worst_xrt": 206.08758688094508,
+      "peak_vram_mb": 1993,
+      "peak_temp_c": 50,
+      "segment_count": 0
+    },
+    {
+      "clip": "silence-30s",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\silence-30s.wav",
+      "duration_seconds": 30.0,
+      "load_seconds": 17.044538,
+      "repeats": [
+        {
+          "seconds": 0.062996,
+          "xrt": 476.22,
+          "peak_vram_mb": null,
+          "peak_temp_c": null,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 0.062996,
+      "worst_seconds": 0.062996,
+      "median_xrt": 476.2207124261858,
+      "worst_xrt": 476.2207124261858,
+      "peak_vram_mb": null,
+      "peak_temp_c": null,
+      "segment_count": 0
+    },
+    {
+      "clip": "tone-30s",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\tone-30s.wav",
+      "duration_seconds": 30.0,
+      "load_seconds": 17.044538,
+      "repeats": [
+        {
+          "seconds": 0.061001,
+          "xrt": 491.7936,
+          "peak_vram_mb": null,
+          "peak_temp_c": null,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 0.061001,
+      "worst_seconds": 0.061001,
+      "median_xrt": 491.7952164718611,
+      "worst_xrt": 491.7952164718611,
+      "peak_vram_mb": null,
+      "peak_temp_c": null,
+      "segment_count": 0
+    }
+  ],
+  "aggregate": {
+    "clip_count": 4,
+    "total_audio_seconds": 3690.0,
+    "median_xrt": 341.1541,
+    "worst_xrt": 67.8765,
+    "peak_vram_mb": 1993,
+    "peak_temp_c": 50
+  },
+  "environment": {
+    "python": "3.12.14",
+    "platform": "Windows-11-10.0.26100-SP0",
+    "machine": "AMD64",
+    "packages": {
+      "faster-whisper": "1.2.1",
+      "ctranslate2": "4.9.0",
+      "torch": "2.11.0+cu128",
+      "numpy": "2.5.4"
+    },
+    "nvidia_smi": true,
+    "ffmpeg": true,
+    "ffprobe": true
+  },
+  "run_dir": "eval\\results\\large-v3-int8-float16-beam5-batch8-vad"
+}

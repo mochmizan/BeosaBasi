@@ -1,0 +1,39 @@
+{
+  "clip": "noise-60min",
+  "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\noise-60min.wav",
+  "duration_seconds": 3600.0,
+  "load_seconds": 9.322356,
+  "repeats": [
+    {
+      "seconds": 17.157406,
+      "xrt": 209.8219,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 50,
+      "segment_count": 0,
+      "segments": []
+    },
+    {
+      "seconds": 21.360208,
+      "xrt": 168.5377,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 49,
+      "segment_count": 0,
+      "segments": []
+    },
+    {
+      "seconds": 18.368261,
+      "xrt": 195.9902,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 48,
+      "segment_count": 0,
+      "segments": []
+    }
+  ],
+  "median_seconds": 18.368261,
+  "worst_seconds": 21.360208,
+  "median_xrt": 195.99024643650262,
+  "worst_xrt": 168.53768465175995,
+  "peak_vram_mb": 1097,
+  "peak_temp_c": 50,
+  "segment_count": 0
+}

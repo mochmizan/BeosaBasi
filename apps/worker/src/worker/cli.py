@@ -207,13 +207,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"sample written: {path} ({args.seconds}s silence, {SAMPLE_RATE} Hz)")
         return 0
     if args.command == "run":
-        if not args.fake:
-            print("real GPU loop arrives in TK-030; use `run --fake` for now.")
-            return 2
+        if args.fake:
+            try:
+                return run_fake_loop(args.api_url, args.once)
+            except KeyboardInterrupt:
+                print("fake worker: dihentikan.")
+                return 0
+        from worker.config import WorkerConfig
+        from worker.runner import Runner, install_signal_handlers
+
+        config = WorkerConfig.from_env(api_url=args.api_url).require_token()
+        runner = Runner(config)
+        install_signal_handlers(runner)
         try:
-            return run_fake_loop(args.api_url, args.once)
+            return runner.run(once=args.once)
         except KeyboardInterrupt:
-            print("fake worker: dihentikan.")
+            print("worker: dihentikan.")
             return 0
     if args.command == "demo":
         return demo(args.api_url)

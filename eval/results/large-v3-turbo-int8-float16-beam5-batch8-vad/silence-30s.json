@@ -1,0 +1,39 @@
+{
+  "clip": "silence-30s",
+  "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\silence-30s.wav",
+  "duration_seconds": 30.0,
+  "load_seconds": 9.322356,
+  "repeats": [
+    {
+      "seconds": 0.128323,
+      "xrt": 233.7849,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 48,
+      "segment_count": 0,
+      "segments": []
+    },
+    {
+      "seconds": 0.140883,
+      "xrt": 212.9428,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 48,
+      "segment_count": 0,
+      "segments": []
+    },
+    {
+      "seconds": 0.190143,
+      "xrt": 157.7758,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 48,
+      "segment_count": 0,
+      "segments": []
+    }
+  ],
+  "median_seconds": 0.140883,
+  "worst_seconds": 0.190143,
+  "median_xrt": 212.9426545431315,
+  "worst_xrt": 157.77598964989508,
+  "peak_vram_mb": 1097,
+  "peak_temp_c": 48,
+  "segment_count": 0
+}

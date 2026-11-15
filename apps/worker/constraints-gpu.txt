@@ -1,0 +1,9 @@
+# Stack GPU valid (TK-050, Nov 2026, RTX 4050):
+# torch 2.11+cu128 + pyannote.audio 4 + hub 2.x + faster-whisper 1.2.1.
+# Jangan campur: pyannote 3.x butuh hub<1, sedangkan faster-whisper 1.2.1
+# butuh hub>=2 (token=). pyannote 4 decode via torchcodec DLL yang rusak
+# di Windows — pekerja mengumpan waveform numpy langsung (lihat TK-051).
+# Install: torch dulu dari index cu128, lalu sisanya dari PyPI.
+#   uv pip install --index https://download.pytorch.org/whl/cu128 torch
+#   uv pip install -r requirements.lock
+torch==2.11.0+cu128

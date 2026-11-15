@@ -24,7 +24,7 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 - [ ] TK-003 Pengaturan Cloudflare Pages, R2, DNS, Turnstile (dep: TK-000)
 - [ ] TK-004 Penyiapan VPS (dep: TK-000, TK-003)
 - [x] TK-005 Penyiapan laptop Windows dan perintah doctor (dep: TK-000)
-- [ ] TK-010 Harness benchmark transkripsi (dep: TK-005)
+- [x] TK-010 Harness benchmark transkripsi (dep: TK-005)
 - [ ] TK-011 Set uji 60 klip dan pedoman anotasi (tanpa dep, jalur manusia)
 - [ ] TK-012 Pipeline skor WER dan daftar pemetaan (dep: TK-010, TK-011)
 - [ ] TK-013 GERBANG Jalankan benchmark dan keputusan model (dep: TK-010, TK-011, TK-012)
@@ -45,12 +45,12 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 
 ## Fase 1: Pekerja laptop
 
-- [ ] TK-030 Kerangka pekerja (dep: TK-001, TK-005)
-- [ ] TK-031 Validasi dan normalisasi media (dep: TK-030)
-- [ ] TK-032 Tahap transkripsi (dep: TK-031, TK-013)
-- [ ] TK-033 Pengemasan hasil dan higiene data (dep: TK-032)
-- [ ] TK-034 Perlindungan laptop (dep: TK-030)
-- [ ] TK-035 Penanganan OOM dan percobaan ulang (dep: TK-032)
+- [x] TK-030 Kerangka pekerja (dep: TK-001, TK-005)
+- [x] TK-031 Validasi dan normalisasi media (dep: TK-030)
+- [ ] TK-032 Tahap transkripsi (dep: TK-031, TK-013) — kode + e2e vs API nyata ok, menunggu angka TK-013
+- [x] TK-033 Pengemasan hasil dan higiene data (dep: TK-032)
+- [ ] TK-034 Perlindungan laptop (dep: TK-030) — kode ok, butuh uji cabut-kabel fisik
+- [ ] TK-035 Penanganan OOM dan percobaan ulang (dep: TK-032) — logika retry diuji stub, butuh bukti OOM CUDA nyata
 
 ## Fase 1: Web
 
@@ -88,7 +88,7 @@ kriteria penerimaan belum terpenuhi dengan data nyata.
 
 | Tiket | Yang sudah ada | Yang masih menghalangi |
 |---|---|---|
-| TK-010 | `worker bench` + `--fake`, JSON per klip, ringkasan xRT/VRAM, `--repeat`, tes unit | Jalankan di laptop GPU nyata |
+| TK-010 | `worker bench` + `--fake`, JSON per klip, ringkasan xRT/VRAM, `--repeat`, tes unit, **angka GPU nyata 15 Nov (turbo xRT~193, large-v3 xRT~341, klip sintetis, performa saja)** | Set uji nyata untuk mutu (TK-011) |
 | TK-011 | `freeze_set.py` (validasi jumlah, persetujuan, audio, manifest SHA-256) | 60 klip + 20 klip hening dan formulir persetujuan bertanda tangan |
 | TK-012 | `score_wer.py` (WER ketat/longgar, laporan per kategori, cek set beku) | Set uji nyata dan hasil benchmark nyata |
 | TK-013 | Perbandingan konfigurasi didukung `worker bench` | Keputusan model di Lampiran A |

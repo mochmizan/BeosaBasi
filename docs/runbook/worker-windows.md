@@ -9,8 +9,14 @@ Akun Windows khusus pekerja tanpa hak admin. Direktori kerja
 2. Python 3.12 + `uv`. Di repo: `cd apps/worker && uv sync`.
 3. GPU stack persis dari lock:
    ```
+   uv pip install --index https://download.pytorch.org/whl/cu128 torch
    uv pip install -r requirements.lock
    ```
+   Jangan `pip install pyannote.audio` polos pada stack lama — ia menukar
+   build CUDA torch. Urutan aman selalu: torch cu128 dulu, lalu sisanya
+   (lihat `apps/worker/constraints-gpu.txt`). pyannote 4 decode via
+   DLL torchcodec yang rusak di Windows — pekerja mengumpan waveform
+   numpy langsung, bukan path berkas.
 4. `ffmpeg` + `ffprobe` di PATH (gyan.dev full build).
 5. Token baca Hugging Face untuk TK-050: `setx HF_TOKEN <token>` (jendela baru).
 

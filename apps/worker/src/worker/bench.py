@@ -108,9 +108,14 @@ class GpuSampler:
     CPU-only machine can still smoke-test the harness with ``--fake``.
     """
 
-    def __init__(self, interval: float = 0.2, binary: str | None = None) -> None:
+    def __init__(self, interval: float = 0.2,
+                 binary: str | bool | None = True) -> None:
+        # True = auto-detect; explicit None/False disables sampling
+        # (CPU-only smoke tests); a string forces that binary.
+        if binary is True:
+            binary = shutil.which("nvidia-smi")
         self.interval = interval
-        self.binary = binary or shutil.which("nvidia-smi")
+        self.binary = binary or None
         self._peak_vram_mb: int | None = None
         self._peak_temp_c: int | None = None
         self._stop = threading.Event()
@@ -186,6 +191,17 @@ class FasterWhisperTranscriber:
         self._model: Any = None
 
     def load(self) -> float:
+        try:  # expose torch's CUDA DLLs before ctranslate2 loads (Windows)
+            import os as _os
+            import sys as _sys
+
+            import torch as _torch
+
+            if _sys.platform == "win32":
+                _os.add_dll_directory(
+                    _os.path.join(_os.path.dirname(_torch.__file__), "lib"))
+        except ImportError:
+            pass
         try:
             from faster_whisper import WhisperModel
         except ImportError as exc:  # pragma: no cover - depends on host install
@@ -213,7 +229,6 @@ class FasterWhisperTranscriber:
             payload,
             language=self.config.language,
             beam_size=self.config.beam_size,
-            batch_size=self.config.batch_size,
             vad_filter=self.config.vad,
             condition_on_previous_text=False,
         )

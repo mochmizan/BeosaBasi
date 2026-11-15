@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "created_at": "2026-11-15T10:48:01.592527+00:00",
+  "backend": "faster-whisper",
+  "folder": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips",
+  "config": {
+    "model": "large-v3-turbo",
+    "compute_type": "int8_float16",
+    "beam_size": 5,
+    "batch_size": 8,
+    "vad": true,
+    "language": "id",
+    "device": "cuda"
+  },
+  "config_slug": "large-v3-turbo-int8-float16-beam5-batch8-vad",
+  "repeat": 3,
+  "load_seconds": 9.322356,
+  "clips": [
+    {
+      "clip": "noise-30s",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\noise-30s.wav",
+      "duration_seconds": 30.0,
+      "load_seconds": 9.322356,
+      "repeats": [
+        {
+          "seconds": 0.757853,
+          "xrt": 39.5855,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 50,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 0.157733,
+          "xrt": 190.1948,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 50,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 0.142547,
+          "xrt": 210.4565,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 50,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 0.157733,
+      "worst_seconds": 0.757853,
+      "median_xrt": 190.19482289692073,
+      "worst_xrt": 39.585513285558015,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 50,
+      "segment_count": 0
+    },
+    {
+      "clip": "noise-60min",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\noise-60min.wav",
+      "duration_seconds": 3600.0,
+      "load_seconds": 9.322356,
+      "repeats": [
+        {
+          "seconds": 17.157406,
+          "xrt": 209.8219,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 50,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 21.360208,
+          "xrt": 168.5377,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 49,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 18.368261,
+          "xrt": 195.9902,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 48,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 18.368261,
+      "worst_seconds": 21.360208,
+      "median_xrt": 195.99024643650262,
+      "worst_xrt": 168.53768465175995,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 50,
+      "segment_count": 0
+    },
+    {
+      "clip": "silence-30s",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\silence-30s.wav",
+      "duration_seconds": 30.0,
+      "load_seconds": 9.322356,
+      "repeats": [
+        {
+          "seconds": 0.128323,
+          "xrt": 233.7849,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 48,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 0.140883,
+          "xrt": 212.9428,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 48,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 0.190143,
+          "xrt": 157.7758,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 48,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 0.140883,
+      "worst_seconds": 0.190143,
+      "median_xrt": 212.9426545431315,
+      "worst_xrt": 157.77598964989508,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 48,
+      "segment_count": 0
+    },
+    {
+      "clip": "tone-30s",
+      "audio": "C:\\Users\\Mizan\\AppData\\Local\\Temp\\bench-clips\\tone-30s.wav",
+      "duration_seconds": 30.0,
+      "load_seconds": 9.322356,
+      "repeats": [
+        {
+          "seconds": 0.176989,
+          "xrt": 169.502,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 48,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 0.203455,
+          "xrt": 147.453,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 48,
+          "segment_count": 0,
+          "segments": []
+        },
+        {
+          "seconds": 0.268411,
+          "xrt": 111.769,
+          "peak_vram_mb": 1097,
+          "peak_temp_c": 48,
+          "segment_count": 0,
+          "segments": []
+        }
+      ],
+      "median_seconds": 0.203455,
+      "worst_seconds": 0.268411,
+      "median_xrt": 147.452753680175,
+      "worst_xrt": 111.76889173692582,
+      "peak_vram_mb": 1097,
+      "peak_temp_c": 48,
+      "segment_count": 0
+    }
+  ],
+  "aggregate": {
+    "clip_count": 4,
+    "total_audio_seconds": 3690.0,
+    "median_xrt": 193.0925,
+    "worst_xrt": 147.4528,
+    "peak_vram_mb": 1097,
+    "peak_temp_c": 50
+  },
+  "environment": {
+    "python": "3.12.14",
+    "platform": "Windows-11-10.0.26100-SP0",
+    "machine": "AMD64",
+    "packages": {
+      "faster-whisper": "1.2.1",
+      "ctranslate2": "4.9.0",
+      "torch": "2.11.0+cu128",
+      "numpy": "2.5.4"
+    },
+    "nvidia_smi": true,
+    "ffmpeg": true,
+    "ffprobe": true
+  },
+  "run_dir": "eval\\results\\large-v3-turbo-int8-float16-beam5-batch8-vad"
+}
