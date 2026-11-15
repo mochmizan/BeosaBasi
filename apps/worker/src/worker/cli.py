@@ -15,6 +15,8 @@ import wave
 
 import httpx
 
+from worker.bench import cmd_bench
+from worker.doctor import run_doctor
 from worker.schemas import ClaimResponse, ProcessingStage
 
 DEFAULT_API_URL = "http://localhost:8000"
@@ -153,7 +155,16 @@ def demo(api_url: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="worker", description="BeosaBasi worker")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("doctor", help="Check worker environment (stub, TK-005)")
+    sub.add_parser("doctor", help="Check worker environment (TK-005, full)")
+    bench = sub.add_parser("bench", help="Benchmark transkripsi (TK-010)")
+    bench.add_argument("folder", help="Folder berisi berkas audio")
+    bench.add_argument("--model", default="large-v3-turbo")
+    bench.add_argument("--compute", default="int8_float16",
+                       choices=["int8_float16", "float16"])
+    bench.add_argument("--beam", type=int, default=5)
+    bench.add_argument("--no-vad", action="store_true")
+    bench.add_argument("--repeat", type=int, default=1)
+    bench.add_argument("--out", default="eval/results/dev")
     sample = sub.add_parser("make-sample", help="Write a silent WAV fixture")
     sample.add_argument("--out", default="contoh-hening-10s.wav")
     sample.add_argument("--seconds", type=int, default=10)
@@ -171,13 +182,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "doctor":
-        # TODO(TK-005): GPU/VRAM, CUDA/cuDNN, ffmpeg/ffprobe, workdir,
-        # HF token presence (never print), sleep guard, battery/thermal.
-        report = doctor_report()
-        print(f"worker doctor: {report['status']} "
-              f"(python={report['python']}, platform={report['platform']})")
-        print("TODO(TK-005): full hardware checks not implemented yet")
-        return 0
+        report = run_doctor()
+        for name, item in report.items():
+            if name == "status":
+                continue
+            mark = "lulus" if item["ok"] == "true" else "GAGAL"
+            print(f"[{mark}] {name}: {item['detail']}")
+        print(f"worker doctor: {report['status']}")
+        return 0 if report["status"] == "ok" else 1
+    if args.command == "bench":
+        return cmd_bench(args)
     if args.command == "make-sample":
         path = make_sample_wav(args.out, seconds=args.seconds)
         print(f"sample written: {path} ({args.seconds}s silence, {SAMPLE_RATE} Hz)")

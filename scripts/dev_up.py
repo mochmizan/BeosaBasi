@@ -24,9 +24,9 @@ S3_ENDPOINT = "http://localhost:3900"
 def sh(*args, capture=False):
     print(f"+ {' '.join(args)}")
     if capture:
-        out = subprocess.run(args, capture_output=True, text=True)
+        out = subprocess.run(args, check=False, capture_output=True, text=True)
         return out.returncode, (out.stdout or "") + (out.stderr or "")
-    return subprocess.run(args).returncode
+    return subprocess.run(args, check=False).returncode
 
 
 def compose(*args, capture=False):
@@ -46,7 +46,7 @@ def wait_for_api(retries=30):
                 if resp.status == 200:
                     print("[dev-up] API sehat di http://localhost:8000")
                     return 0
-        except Exception:
+        except (urllib.error.URLError, OSError, TimeoutError):
             time.sleep(2)
     print("[dev-up] API tidak menjawab /healthz. Lihat log kontainer api.")
     return 1
