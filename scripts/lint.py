@@ -7,6 +7,9 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY_APPS = ["apps/api", "apps/worker"]
+# eval/ has no package of its own; it borrows the worker venv for pytest/ruff.
+EVAL_DIR = "eval"
+EVAL_VENV_OWNER = "apps/worker"
 
 
 def venv_python(app_dir):
@@ -30,6 +33,11 @@ def main():
         py = venv_python(d) or sys.executable
         if run([py, "-m", "ruff", "check", "."], d) != 0:
             failures.append(app + " (ruff)")
+
+    eval_dir = os.path.join(ROOT, EVAL_DIR)
+    eval_py = venv_python(os.path.join(ROOT, EVAL_VENV_OWNER)) or sys.executable
+    if run([eval_py, "-m", "ruff", "check", "."], eval_dir) != 0:
+        failures.append(EVAL_DIR + " (ruff)")
 
     web = os.path.join(ROOT, "apps", "web")
     if not os.path.isdir(os.path.join(web, "node_modules")):
