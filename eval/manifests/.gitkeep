@@ -1,0 +1,2 @@
+# Committed set manifests live here: <set-version>.sha256 + <set-version>.json.
+# The audio and reference transcripts they hash stay in the git-ignored eval/data/.

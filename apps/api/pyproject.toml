@@ -27,3 +27,5 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Lets `pytest` import `api` from src/ without an editable install.
+pythonpath = ["src"]

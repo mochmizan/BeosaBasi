@@ -80,3 +80,23 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 ## Fase 3: Opsional
 
 - [ ] TK-070 Perluasan, hanya setelah telaah hukum dan DPIA lengkap (dep: TK-063, TK-053)
+
+## Catatan kemajuan QA/Eval (belum mengubah status)
+
+Diperbarui: 15 November 2026. **Tidak ada tiket yang dicentang** karena
+kriteria penerimaan belum terpenuhi dengan data nyata.
+
+| Tiket | Yang sudah ada | Yang masih menghalangi |
+|---|---|---|
+| TK-010 | `worker bench` + `--fake`, JSON per klip, ringkasan xRT/VRAM, `--repeat`, tes unit | Jalankan di laptop GPU nyata |
+| TK-011 | `freeze_set.py` (validasi jumlah, persetujuan, audio, manifest SHA-256) | 60 klip + 20 klip hening dan formulir persetujuan bertanda tangan |
+| TK-012 | `score_wer.py` (WER ketat/longgar, laporan per kategori, cek set beku) | Set uji nyata dan hasil benchmark nyata |
+| TK-013 | Perbandingan konfigurasi didukung `worker bench` | Keputusan model di Lampiran A |
+| TK-014 | `score_quality.py` (halusinasi, pengulangan, sampel penanda waktu, sapuan ambang) | 100 penanda waktu manual + kalibrasi ulang audio |
+| TK-053 | `score_der.py` (DER frame/pyannote, akurasi jumlah pembicara) | TK-050 dan 20 pasangan RTTM multi-pembicara |
+| TK-060 | Draf pemberitahuan privasi, ROPA, DPIA-lite, formulir persetujuan, runbook insiden, daftar periksa 44 butir | T-12 (telaah hukum), T-14 (nama produk), kontak privasi, lokasi R2/VPS |
+
+Uji asap `--fake` di `%TEMP%` membuktikan perintah dan laporan berjalan, bukan
+kualitas model. `python scripts/test.py` dan `python scripts/lint.py` hijau
+untuk `apps/api`, `apps/worker`, dan `eval/`; `apps/web` masih gagal karena
+`node_modules` belum ada. Rincian perintah ada di `docs/handoff/03-qa-eval.md`.

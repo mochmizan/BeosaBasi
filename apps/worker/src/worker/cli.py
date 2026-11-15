@@ -1,10 +1,11 @@
 """BeosaBasi worker CLI.
 
 Commands:
-  doctor                    environment check (full hardware checks in TK-005)
+  doctor                    environment check (TK-005, full)
   make-sample               write a 10s silent WAV fixture (stdlib only)
   run --fake                claim and complete jobs with sample output, no GPU
   demo                      seed one dev job (TK-002 fake API) and complete it
+  bench <folder>            benchmark transcription and write JSON (TK-010)
 """
 
 import argparse
@@ -156,15 +157,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="worker", description="BeosaBasi worker")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Check worker environment (TK-005, full)")
-    bench = sub.add_parser("bench", help="Benchmark transkripsi (TK-010)")
-    bench.add_argument("folder", help="Folder berisi berkas audio")
-    bench.add_argument("--model", default="large-v3-turbo")
-    bench.add_argument("--compute", default="int8_float16",
-                       choices=["int8_float16", "float16"])
-    bench.add_argument("--beam", type=int, default=5)
-    bench.add_argument("--no-vad", action="store_true")
-    bench.add_argument("--repeat", type=int, default=1)
-    bench.add_argument("--out", default="eval/results/dev")
     sample = sub.add_parser("make-sample", help="Write a silent WAV fixture")
     sample.add_argument("--out", default="contoh-hening-10s.wav")
     sample.add_argument("--seconds", type=int, default=10)
@@ -176,6 +168,24 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Process a single job then exit")
     demo_p = sub.add_parser("demo", help="Seed + complete one job (TK-002 fake API)")
     demo_p.add_argument("--api-url", default=DEFAULT_API_URL)
+    bench_p = sub.add_parser("bench", help="Benchmark transcription (TK-010)")
+    bench_p.add_argument("folder", help="Folder of audio clips to benchmark")
+    bench_p.add_argument("--model", default="large-v3-turbo")
+    bench_p.add_argument("--compute-type", default="int8_float16",
+                         help="int8_float16, float16, int8, ...")
+    bench_p.add_argument("--beam-size", type=int, default=5)
+    bench_p.add_argument("--batch-size", type=int, default=8)
+    bench_p.add_argument("--vad", action=argparse.BooleanOptionalAction,
+                         default=True, help="Enable Silero VAD (default: on)")
+    bench_p.add_argument("--language", default="id",
+                         help='Language code, or "auto" for detection')
+    bench_p.add_argument("--device", default="cuda")
+    bench_p.add_argument("--repeat", type=int, default=1,
+                         help="Runs per clip; median and worst are reported")
+    bench_p.add_argument("--out", default="eval/results",
+                         help="Output root; a <config-slug>/ folder is created")
+    bench_p.add_argument("--fake", action="store_true",
+                         help="No GPU: exercise the harness with sample output")
     return parser
 
 

@@ -29,3 +29,6 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Lets `pytest` import `worker` from src/ without an editable install
+# (useful on machines where the pinned Python 3.12 is unavailable).
+pythonpath = ["src"]
