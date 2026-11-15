@@ -33,8 +33,8 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 ## Fase 1: API VPS
 
 - [x] TK-020 Skema basis data dan migrasi (dep: TK-001)
-- [ ] TK-021 Autentikasi Google, allowlist, sesi, Turnstile (dep: TK-020, TK-003)
-- [ ] TK-022 Persetujuan dan pemberitahuan privasi (dep: TK-021, TK-060)
+- [ ] TK-021 ~~Autentikasi Google, allowlist, sesi, Turnstile~~ — DIPOTONG (tanpa login, lihat ADR-0001)
+- [ ] TK-022 ~~Persetujuan dan pemberitahuan privasi~~ — DIPOTONG (tanpa login/kebijakan)
 - [x] TK-023 Alur unggah multipart ke R2 (dep: TK-020, TK-021, TK-022, TK-003)
 - [x] TK-024 Siklus job, kuota, dan pembatasan (dep: TK-023)
 - [x] TK-025 API pekerja klaim, detak, hasil, gagal (dep: TK-024)
@@ -55,18 +55,18 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 ## Fase 1: Web
 
 - [x] TK-040 Scaffold web dan klien API (dep: TK-001)
-- [ ] TK-041 Login dan persetujuan (dep: TK-040, TK-022)
-- [ ] TK-042 Unggah dapat dilanjutkan dan kuota (dep: TK-041, TK-023, TK-024)
+- [ ] TK-041 ~~Login dan persetujuan~~ — DIPOTONG (tanpa login)
+- [ ] TK-042 Unggah dapat dilanjutkan dan kuota (dep: TK-040, TK-023, TK-024)
 - [ ] TK-043 Daftar job dan halaman status (dep: TK-042)
 - [ ] TK-044 Editor transkrip dengan audio tersinkron (dep: TK-043, TK-026)
 - [ ] TK-045 Ekspor dan hapus data (dep: TK-044, TK-027, TK-028)
 
 ## Fase 1: Dokumen, keamanan, QA
 
-- [ ] TK-060 Pemberitahuan privasi, ROPA, dan DPIA-lite (dep: nama produk, verifikasi hukum)
+- [ ] TK-060 ~~Pemberitahuan privasi, ROPA, dan DPIA-lite~~ — DIPOTONG (tanpa kebijakan)
 - [ ] TK-061 Tinjauan model ancaman dan daftar periksa keamanan (dep: TK-025, TK-023, TK-031)
 - [ ] TK-062 Uji ujung ke ujung, beban, dan latihan kegagalan (dep: TK-045, TK-035, TK-028)
-- [ ] TK-063 Kesiapan pilot tertutup (dep: TK-060, TK-061, TK-062)
+- [ ] TK-063 Kesiapan pilot tertutup (dep: TK-061, TK-062)
 
 ## Fase 2: Pelabelan pembicara
 
