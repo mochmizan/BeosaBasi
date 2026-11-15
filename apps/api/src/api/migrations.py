@@ -113,8 +113,60 @@ DROP TABLE IF EXISTS allowlist;
 DROP TABLE IF EXISTS users;
 """
 
+MIGRATION_002_UP = """
+CREATE TABLE IF NOT EXISTS anon_sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ip_hash TEXT NOT NULL,
+  dibuat_pada TEXT NOT NULL,
+  terakhir_dilihat TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anon_ip ON anon_sessions(ip_hash);
+CREATE INDEX IF NOT EXISTS idx_anon_user ON anon_sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS upload_sessions (
+  job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+  upload_id TEXT NOT NULL,
+  part_size INTEGER NOT NULL,
+  part_count INTEGER NOT NULL,
+  dibuat_pada TEXT NOT NULL,
+  selesai_pada TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_upload_selesai ON upload_sessions(selesai_pada);
+
+CREATE TABLE IF NOT EXISTS job_metrics (
+  job_id TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+  xrt REAL,
+  low_confidence_ratio REAL,
+  worker_seconds REAL,
+  model_version TEXT,
+  edit_chars INTEGER NOT NULL DEFAULT 0,
+  total_chars INTEGER NOT NULL DEFAULT 0,
+  dikirim_pada TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rate_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kunci TEXT NOT NULL,
+  waktu TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rate_kunci_waktu ON rate_events(kunci, waktu);
+"""
+
+MIGRATION_002_DOWN = """
+DROP INDEX IF EXISTS idx_rate_kunci_waktu;
+DROP TABLE IF EXISTS rate_events;
+DROP TABLE IF EXISTS job_metrics;
+DROP INDEX IF EXISTS idx_upload_selesai;
+DROP TABLE IF EXISTS upload_sessions;
+DROP INDEX IF EXISTS idx_anon_user;
+DROP INDEX IF EXISTS idx_anon_ip;
+DROP TABLE IF EXISTS anon_sessions;
+"""
+
 MIGRATIONS: list[tuple[int, str, str]] = [
     (1, MIGRATION_001_UP, MIGRATION_001_DOWN),
+    (2, MIGRATION_002_UP, MIGRATION_002_DOWN),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1][0]

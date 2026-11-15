@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /srv/api
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir "fastapi>=0.115,<0.117" "pydantic>=2.9,<3" "uvicorn>=0.30,<0.35" "httpx>=0.27,<1"
+RUN pip install --no-cache-dir "fastapi>=0.115,<0.117" "pydantic>=2.9,<3" "uvicorn>=0.30,<0.35" "httpx>=0.27,<1" "boto3>=1.35,<2" "python-docx>=1.1,<2"
 COPY src ./src
 EXPOSE 8000
 HEALTHCHECK --interval=5s --timeout=3s --retries=12 \

@@ -11,12 +11,12 @@ bisa paralel setelah TK-001.
 | US-03 sunting tersinkron | `GET /api/jobs/{id}/transcript`, `PATCH /api/jobs/{id}/segments/{n}`, `GET /api/jobs/{id}/audio-url` |
 | US-04 ekspor | `GET /api/jobs/{id}/export?format=txt\|srt\|vtt\|docx` |
 | US-05 hapus data | `DELETE /api/jobs/{id}`, `DELETE /api/me` |
-| US-06 persetujuan + privasi | `POST /api/consents`, `DELETE /api/consents`, `GET /api/me` (status persetujuan) |
+| US-06 persetujuan + privasi | (dipotong: tanpa login, lihat `docs/ADR/0001-anonymous-identity.md`) |
 | US-07 kuota | `GET /api/me` (`quota_minutes_remaining`, `active_jobs`), `POST /api/uploads` (penolakan kuota) |
 | US-08 pelabelan pembicara | `POST /api/uploads` (`diarization`, `min/max_speakers`), `GET /api/jobs/{id}/transcript`, `PATCH /api/jobs/{id}/speakers/{sid}`, `PATCH /api/jobs/{id}/segments/{n}` (pindah pembicara), ekspor memakai nama |
 | Pekerja (semua US) | `POST /worker/v1/jobs/claim`, `POST /worker/v1/jobs/{id}/heartbeat`, `POST /worker/v1/jobs/{id}/result`, `POST /worker/v1/jobs/{id}/fail`, `POST /worker/v1/ping` |
 | Auth + sesi | `GET /auth/google/login`, `GET /auth/google/callback`, `POST /auth/logout` |
-| Observabilitas | `GET /healthz` |
+| Observabilitas | `GET /healthz`, `GET /api/admin/metrics` (header `X-Admin-Token`) |
 
 Aturan perubahan: ubahan kontrak lewat PR berlabel jalur terdampak dan
 menjalankan ulang `make gen-client` agar `api-types.ts` dan kedua
