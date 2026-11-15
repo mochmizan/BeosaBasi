@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BeosaBasi — Mockup MVP</title>
+<style>
+:root{--bg:#0f1419;--card:#1a2230;--line:#2a3650;--txt:#e8eef7;--mut:#9fb0c7;--acc:#4cc2ff;--ok:#3ecf8e;--warn:#ffb020;--bad:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 system-ui,Segoe UI,Roboto,Arial}
+header{display:flex;gap:12px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#0f1419}
+.logo{font-weight:800;font-size:18px}.logo span{color:var(--acc)}
+.badge{border:1px solid var(--line);border-radius:20px;padding:2px 10px;color:var(--mut);font-size:12px}
+.badge.ok{color:var(--ok);border-color:var(--ok)}.wrap{max-width:1080px;margin:0 auto;padding:18px}
+.tabs{display:flex;gap:8px;margin:14px 0}.tabs button{background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.tabs button.on{background:var(--acc);color:#04202e;border-color:var(--acc);font-weight:700}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card h3{margin:0 0 8px}.mut{color:var(--mut);font-size:12px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--mut)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+input,select{background:#0d1320;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+button.pri{background:var(--acc);border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}
+button.sec{background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 12px;cursor:pointer}
+.prog{height:10px;background:#0d1320;border-radius:6px;overflow:hidden;border:1px solid var(--line)}.prog i{display:block;height:100%;width:0;background:var(--acc)}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:8px;border-bottom:1px solid var(--line);font-size:13px}
+.pill{border-radius:20px;padding:2px 10px;font-size:12px;border:1px solid var(--line)}
+.q{color:var(--warn)}.p{color:var(--acc)}.c{color:var(--ok)}.f{color:var(--bad)}
+.seg{border:1px solid var(--line);border-radius:8px;padding:8px;margin:8px 0;background:#141c2b}
+.seg.low{border-color:var(--warn)}.seg .t{color:var(--acc);font-variant-numeric:tabular-nums;cursor:pointer}
+.spk{background:#0d1320;border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:12px}
+.note{background:#0d1320;border:1px solid var(--line);border-radius:8px;padding:8px;color:var(--mut);font-size:12px}
+footer{color:var(--mut);font-size:12px;padding:18px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+<div class="logo">Beosa<span>Basi</span></div>
+<div class="badge">Mockup MVP — tanpa backend</div>
+<div style="flex:1"></div>
+<div class="badge">Kuota: 45 / 60 mnt • reset 00:00 UTC+7</div>
+<div class="badge ok">● pekerja aktif</div>
+<div class="badge">dina@contoh.id</div>
+</header>
+<div class="wrap">
+<div class="tabs">
+<button class="on" data-t="up">1 • Unggah</button>
+<button data-t="jobs">2 • Job saya</button>
+<button data-t="ed">3 • Editor transkrip</button>
+<button data-t="pr">4 • Privasi & hapus</button>
+</div>
+
+<section id="t-up" class="grid">
+<div class="card">
+<h3>Unggah baru (US-01, K4)</h3>
+<div class="drop" id="drop">Seret berkas ke sini atau <button class="sec" onclick="fakePick()">pilih berkas</button><br><span class="mut">MP3 M4A WAV FLAC OGG/Opus MP4 WebM • maks 200 MB • maks 90 menit</span></div>
+<div class="row"><label>Bahasa <select><option>Indonesia (default)</option><option>Inggris</option><option>Otomatis</option></select></label>
+<label><input type="checkbox" id="spk"> Pisahkan pembicara (2× kuota, lebih lama)</label></div>
+<div class="row" id="spkHint" style="display:none"><label>Petunjuk jumlah <input value="2-4" size="6"> maks 8</label></div>
+<div class="row"><label><input type="checkbox" id="c1"> Saya setuju pemberitahuan privasi v1.2</label>
+<label><input type="checkbox" id="c2"> Saya ≥ 18 tahun</label></div>
+<div class="note">Turnstile placeholder — diverifikasi di VPS saat <code>POST /api/uploads</code>. Kunci objek: <code>uploads/{user_id}/{job_id}</code>, tanpa nama berkas asli.</div>
+<div class="row"><button class="pri" onclick="startUp()">Mulai unggah (8 MiB × 3 paralel)</button><button class="sec" onclick="cutNet()">Simulasi putus → lanjutkan</button></div>
+<div class="prog"><i id="bar"></i></div><div class="mut" id="upstat">Siap. Potongan ListParts akan dipakai untuk pelanjutan.</div>
+</div>
+<div class="card">
+<h3>Pratinjau berkas</h3>
+<div id="prev" class="mut">Belum ada berkas. Contoh: <code>wawancara-45 mnt.mp3 — 68 MB — durasi peramban hanya petunjuk kuota</code>.</div>
+<div class="note">Pemeriksaan ringan VPS ≤5 dtk (ukuran, tipe, tanda tangan 64 KiB). Pemeriksaan penuh <code>ffprobe</code> oleh pekerja ≤60 dtk, berkas rusak → gagal dengan alasan manusiawi.</div>
+</div>
+</section>
+
+<section id="t-jobs" style="display:none">
+<div class="card">
+<h3>Daftar job (US-02, polling 5 dtk)</h3>
+<table><tr><th>Job</th><th>Status</th><th>Antrean</th><th>Aksi</th></tr>
+<tr><td>wawancara-45mnt<br><span class="mut">45:12 • id • 68 MB</span></td><td><span class="pill q">queued</span></td><td>#2 • ±11 mnt</td><td><button class="sec" onclick="goEd()">buka</button></td></tr>
+<tr><td>rapat-rt-30mnt<br><span class="mut">transcribing 62% • sewa 5 mnt • detak 30 dtk</span></td><td><span class="pill p">processing</span></td><td>—</td><td><button class="sec" onclick="goEd()">buka</button></td></tr>
+<tr><td>pesan-wa-02mnt.opus<br><span class="mut">selesai 1,9×RT • 14 segmen</span></td><td><span class="pill c">completed</span></td><td>—</td><td><button class="sec" onclick="goEd()">buka</button></td></tr>
+<tr><td>video-kuliah-80mnt.mp4<br><span class="mut">gagal (kapasitas) • percobaan 3/3</span></td><td><span class="pill f">failed</span></td><td>—</td><td><button class="sec">coba lagi</button></td></tr>
+</table>
+<div class="note" style="margin-top:8px">Bila pekerja mati &gt;90 dtk: tampil “pemrosesan tertunda”, bukan “diproses” palsu. Job &gt;72 jam → <code>expired</code>, audio dihapus, pengguna diberi tahu.</div>
+</div>
+</section>
+
+<section id="t-ed" style="display:none">
+<div class="grid">
+<div class="card">
+<h3>Editor — pesan-wa-02mnt (US-03, US-08)</h3>
+<audio controls style="width:100%" src=""></audio>
+<div class="mut">Klik penanda waktu → putar dari titik itu (selisih ≤1 dtk). Audio hanya ≤24 jam setelah selesai.</div>
+<div class="seg"><span class="t" onclick="seek(0)">[00:00-00:04]</span> <span class="spk">Pembicara 1</span> selamat pagi, terima kasih sudah bersedia diwawancarai</div>
+<div class="seg low"><span class="t" onclick="seek(4.2)">[00:04-00:09]</span> <span class="spk">Pembicara 2</span> selamat pagi juga, dengan <u>senang hati</u> <span class="mut">• keyakinan rendah — simpan otomatis ≤5 dtk, versi 3</span></div>
+<div class="seg"><span class="t">[00:09-00:15]</span> <span class="spk">Pembicara 1</span> boleh cerita awal mula usaha ini?</div>
+<div class="row"><button class="sec">Ganti nama label</button><button class="sec">Pindah segmen → Pembicara 1</button></div>
+<div class="note" id="save">Sunting bertahan setelah muat ulang. Sunting tidak mengubah penanda waktu. Konflik versi → tolak dengan pesan.</div>
+</div>
+<div class="card">
+<h3>Ekspor & hapus (US-04, US-05)</h3>
+<div class="row"><button class="sec">TXT</button><button class="sec">SRT ✓</button><button class="sec">VTT ✓</button><button class="sec">DOCX</button></div>
+<div class="mut">SRT/VTT lolos pemeriksa, awalan “Nama:”. Ekspor mencerminkan suntingan + nama pembicara terbaru, tetap bisa walau audio sudah dihapus.</div>
+<div class="row"><button class="sec" onclick="alert('Job dihapus → audio+transkrip terjadwal ≤24 jam')">Hapus job ini</button><button class="sec" onclick="alert('Hapus akun → semua job+segmen+audio+sesi')">Hapus seluruh akun</button></div>
+<div class="note">Retensi: audio ≤24 jam, transkrip 30 hari, cadangan ≤7 hari. Pemutar disembunyikan dengan keterangan setelah audio dihapus.</div>
+</div>
+</div>
+</section>
+
+<section id="t-pr" style="display:none">
+<div class="card">
+<h3>Persetujuan & privasi (US-06, TK-060)</h3>
+<div class="mut">Data: audio sementara di R2 + VPS, transkrip 30 hari, metrik tanpa teks (xRT, rasio sunting). Ciri suara sementara untuk diarisasi, tidak disimpan, tanpa lintas-rekaman. Dasar: persetujuan eksplisit v1.2. Penarikan → henti + hapus ≤3×24 jam. Tombol tarik + atribusi model di bawah.</div>
+<div class="row"><button class="sec">Tarik persetujuan</button><button class="sec">Unduh salinan saya</button></div>
+<div class="note">Atribusi: Whisper large-v3-turbo • pyannote speaker-diarization-community-1 (CC-BY-4.0) • token HF tidak di repo. Kill-switch pilot: nonaktifkan unggah lewat satu pengaturan.</div>
+</div>
+</section>
+
+<footer>BeosaBasi mockup • VPS target: beosabasi.netclub.my.id → 127.0.0.1:18081 • video/audio tidak lewat proksi, hanya URL R2 bertanda tangan • © pilot tertutup ≤50 undangan</footer>
+</div>
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');['up','jobs','ed','pr'].forEach(k=>document.getElementById('t-'+k).style.display=(b.dataset.t===k?'':'none'))});
+document.getElementById('spk').onchange=e=>document.getElementById('spkHint').style.display=e.target.checked?'':'none';
+function goEd(){document.querySelector('[data-t=ed]').click()}
+function fakePick(){document.getElementById('prev').textContent='wawancara-45mnt.mp3 — 68,2 MB — 45:12 (petunjuk kuota ±45 mnt, -90 mnt bila diarisasi)'}
+let p=0,t=null;function startUp(){if(!c1.checked||!c2.checked){alert('Centang persetujuan + usia dulu (US-06 diblokir tanpa itu)');return}clearInterval(t);t=setInterval(()=>{p=Math.min(100,p+(p>70?2:7));bar.style.width=p+'%';upstat.textContent='Mengunggah potongan 8 MiB ('+p+'%) — 3 paralel • ETag ok';if(p>=100){clearInterval(t);upstat.textContent='Complete → queued #2 • pemeriksaan ringan lolos (≤5 dtk)'}} ,300)}
+function cutNet(){clearInterval(t);upstat.textContent='Jaringan putus di '+p+'% → GET ListParts → lanjut dari potongan terakhir, tanpa ulang dari awal';setTimeout(startUp,1200)}
+function seek(s){document.querySelector('audio').currentTime=s;document.getElementById('save').textContent='Seek ke '+s+' dtk (demo). Di MVP: klik segmen = audio.play('+s+')'}
+</script>
+</body>
+</html>
