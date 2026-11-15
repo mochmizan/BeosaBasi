@@ -1,0 +1,58 @@
+# BeosaBasi VPS stack (TK-004 interim: Garage as R2 stand-in, quick tunnels).
+# Loopback publishes only. No host 80/443. Own network beosabasi-net.
+# Secrets live in /opt/beosabasi/.env (600, never in git).
+# S3_ENDPOINT must be the PUBLIC s3 tunnel URL: presigned URLs are used
+# verbatim by browsers and the laptop worker, so the signing host has to
+# be reachable from the internet (hairpinned back to 127.0.0.1:3900).
+name: beosabasi
+
+services:
+  api:
+    build:
+      context: ./src/apps/api
+      dockerfile: Dockerfile
+    environment:
+      BEOSABASI_DB_PATH: /data/beosabasi.db
+      BEOSABASI_COOKIE_SECURE: "0"
+      BEOSABASI_TRUST_PROXY: "1"
+      S3_FORCE_PATH_STYLE: "1"
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:18082:8000"
+    volumes:
+      - api-data:/data
+    depends_on:
+      s3:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 160M
+          cpus: "0.5"
+    networks:
+      - beosabasi-net
+
+  s3:
+    image: dxflrs/garage:v2.3.0
+    command: ["/garage", "-c", "/etc/garage.toml", "server"]
+    ports:
+      - "127.0.0.1:3900:3900"
+    volumes:
+      - ./garage.vps.toml:/etc/garage.toml:ro
+      - s3-data:/var/lib/garage
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+          cpus: "0.25"
+    networks:
+      - beosabasi-net
+
+volumes:
+  api-data:
+  s3-data:
+
+networks:
+  beosabasi-net:
+    driver: bridge
