@@ -1,71 +1,95 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useParams } from "react-router-dom";
-import type { JobDetail, Transcript } from "../api-types";
-import { api } from "../api/client";
+import { ArrowLeft } from "lucide-react";
+import Transcript, { type TranscriptJob } from "../components/Transcript";
 import ErrorMessage from "../components/ErrorMessage";
+import { useStudio } from "../components/studio";
+import { uiJobCard, uiTranscript, stageProgress } from "../lib/adapters";
+import { useJobTranscript } from "../lib/useJobTranscript";
+import { PESAN_GALAT } from "../api/errors";
 
-export default function JobDetailPage(): React.JSX.Element {
+export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [detail, setDetail] = useState<JobDetail | null>(null);
-  const [transcript, setTranscript] = useState<Transcript | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const { navigate, toast } = useStudio();
+  const jobId = id ?? null;
+  const {
+    detail,
+    transcript,
+    audioUrl,
+    error,
+    loading,
+    editSegment,
+    reassign,
+    renameSpeaker,
+    exportAs,
+    deleteJob,
+  } = useJobTranscript(jobId);
 
-  useEffect(() => {
-    if (!id) return;
-    let aktif = true;
-    async function muat(): Promise<void> {
-      try {
-        const d = await api.getJob(id as string);
-        if (!aktif) return;
-        setDetail(d);
-        if (d.job.state === "completed") {
-          setTranscript(await api.getTranscript(id as string));
-        }
-      } catch (e: unknown) {
-        if (aktif) setError(e);
-      }
-    }
-    void muat();
-    return () => {
-      aktif = false;
+  const parsed = transcript ? uiTranscript(transcript) : { segments: [], speakers: [] };
+
+  const job: TranscriptJob | null = useMemo(() => {
+    if (detail === null) return null;
+    return {
+      ...uiJobCard(detail.job),
+      queuePosition: detail.queue_position ?? null,
+      eta:
+        detail.eta_seconds !== null && detail.eta_seconds !== undefined
+          ? `±${Math.max(1, Math.round(detail.eta_seconds / 60))} menit`
+          : null,
+      progress: stageProgress(detail.job.stage),
+      stage: detail.job.stage ?? null,
+      workerActive: detail.worker_active,
+      error: detail.job.error_code ? PESAN_GALAT[detail.job.error_code] : null,
+      audioExpires: audioUrl ? "≤24 jam" : undefined,
+      words: parsed.segments.reduce(
+        (acc, s) => acc + s.text.split(/\s+/).filter(Boolean).length,
+        0,
+      ),
+      speakers: parsed.speakers,
     };
-  }, [id]);
+  }, [audioUrl, detail, parsed.segments, parsed.speakers]);
 
-  if (!id) return <ErrorMessage error={new Error("ID pekerjaan hilang.")} />;
+  if (jobId === null) return <ErrorMessage error={new Error("ID pekerjaan hilang.")} />;
   if (error !== null) return <ErrorMessage error={error} />;
-  if (!detail) return <p className="bb-muted">Memuat status pekerjaan…</p>;
 
   return (
-    <section>
-      <h1>{detail.job.filename}</h1>
-      <div className="bb-card">
-        <p>
-          Status: <strong>{detail.job.state}</strong>
-          {detail.job.stage ? ` (${detail.job.stage})` : ""}
-        </p>
-        {detail.queue_position !== null && detail.queue_position !== undefined && (
-          <p>Antrean ke-{detail.queue_position}</p>
-        )}
-        {!detail.worker_active && detail.job.state !== "completed" && (
-          <p className="bb-muted">
-            Pemrosesan tertunda karena perangkat mati. Job aman dan jalan otomatis
-            saat perangkat aktif.
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <button className="link-btn" onClick={() => navigate("library")}>
+            <ArrowLeft size={13} /> Kembali ke pustaka
+          </button>
+          <h1>
+            {job ? job.title : "Memuat pekerjaan…"}
+          </h1>
+          <p className="page-sub">
+            {job
+              ? `${job.file} · ${job.duration} · ${job.language}`
+              : "Mengambil status dan transkrip dari server."}
           </p>
-        )}
-      </div>
-      {transcript && (
-        <div className="bb-card">
-          <h2>Transkrip</h2>
-          {transcript.segments.map((s) => (
-            <p key={s.index}>
-              <span className="bb-muted">
-                [{s.start.toFixed(1)}–{s.end.toFixed(1)}]
-              </span>{" "}
-              {s.text}
-            </p>
-          ))}
         </div>
+      </div>
+
+      {job === null ? (
+        <p className="bb-muted">{loading ? "Memuat status pekerjaan…" : "Pekerjaan tidak ditemukan."}</p>
+      ) : (
+        <Transcript
+          job={job}
+          segments={parsed.segments}
+          speakers={parsed.speakers}
+          audioUrl={audioUrl}
+          onEditSegment={editSegment}
+          onReassign={reassign}
+          onRenameSpeaker={renameSpeaker}
+          onExport={exportAs}
+          onDeleteJob={() => {
+            deleteJob();
+            navigate("library");
+          }}
+          onNavigate={navigate}
+          onToast={toast}
+        />
       )}
-    </section>
+    </div>
   );
 }
