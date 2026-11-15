@@ -23,7 +23,7 @@ memperbarui file ini di PR yang sama saat menyelesaikan tiket.
 
 - [ ] TK-003 Pengaturan Cloudflare Pages, R2, DNS, Turnstile (dep: TK-000)
 - [ ] TK-004 Penyiapan VPS (dep: TK-000, TK-003)
-- [ ] TK-005 Penyiapan laptop Windows dan perintah doctor (dep: TK-000)
+- [x] TK-005 Penyiapan laptop Windows dan perintah doctor (dep: TK-000)
 - [ ] TK-010 Harness benchmark transkripsi (dep: TK-005)
 - [ ] TK-011 Set uji 60 klip dan pedoman anotasi (tanpa dep, jalur manusia)
 - [ ] TK-012 Pipeline skor WER dan daftar pemetaan (dep: TK-010, TK-011)
