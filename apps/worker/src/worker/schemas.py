@@ -98,6 +98,10 @@ class PartSignResponse(BaseModel):
     expires_at: str
 
 
+class PartPutResponse(BaseModel):
+    etag: str = Field(description="ETag potongan untuk dipakai di complete")
+
+
 class UploadStatus(BaseModel):
     job_id: str
     state: JobState

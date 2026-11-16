@@ -103,7 +103,7 @@ def upload_job(client: TestClient, storage: MemoryStorage, *,
     parts = []
     for number in range(1, session["part_count"] + 1):
         chunk = payload[(number - 1) * part_size: number * part_size]
-        etag = storage.put_part(upload_id, number, chunk)
+        etag = storage.put_part(storage.key_for(upload_id), upload_id, number, chunk)
         parts.append({"part_number": number, "etag": etag})
     resp = client.post(f"/api/uploads/{session['job_id']}/complete",
                        json={"parts": parts})

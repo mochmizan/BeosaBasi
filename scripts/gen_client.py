@@ -36,6 +36,7 @@ EXPECTED_OPS = [
     ("delete", "/api/consents"),
     ("post", "/api/uploads"),
     ("post", "/api/uploads/{id}/parts"),
+    ("put", "/api/uploads/{id}/parts/{n}"),
     ("get", "/api/uploads/{id}"),
     ("post", "/api/uploads/{id}/complete"),
     ("get", "/api/jobs"),

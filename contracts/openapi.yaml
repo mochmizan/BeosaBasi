@@ -161,6 +161,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PartSignResponse"
+  /api/uploads/{id}/parts/{n}:
+    put:
+      summary: Teruskan satu potongan lewat API (relay same-origin, anti-CORS)
+      operationId: putPartRelay
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/PartNumber"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: ETag potongan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartPutResponse"
   /api/uploads/{id}:
     get:
       summary: Daftar potongan yang sudah ada (pelanjutan unggah, ListParts)
@@ -491,6 +512,14 @@ components:
       schema:
         type: string
         format: uuid
+    PartNumber:
+      name: n
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 10000
     OAuthCode:
       name: code
       in: query
@@ -722,6 +751,13 @@ components:
         expires_at:
           type: string
           format: date-time
+    PartPutResponse:
+      type: object
+      required: [etag]
+      properties:
+        etag:
+          type: string
+          description: ETag potongan untuk dipakai di complete
     UploadStatus:
       type: object
       required: [job_id, state, parts_done, parts_total]

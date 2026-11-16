@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi import Response as HttpResponse
 
 from api import dal, ratelimit, schemas
@@ -168,6 +168,39 @@ def sign_part(job_id: str, body: schemas.PartSignRequest,
     except StorageError as exc:
         raise ApiError(503, "INTERNAL", PESAN_GUDANG) from exc
     return schemas.PartSignResponse(url=url, expires_at=iso(expires))
+
+
+@router.put("/{job_id}/parts/{part_number}",
+            response_model=schemas.PartPutResponse)
+async def put_part_relay(job_id: str, part_number: int, request: Request,
+                         conn: sqlite3.Connection = Depends(db_conn),
+                         ident: Identity = Depends(identity),
+                         settings: Settings = Depends(get_settings),
+                         storage: Storage = Depends(get_storage)
+                         ) -> schemas.PartPutResponse:
+    """Relay satu potongan lewat API (same-origin, anti-CORS).
+
+    Interim sampai R2 + CORS bucket (TK-003): Garage tidak menjawab
+    preflight OPTIONS sehingga PUT presigned dari peramban selalu gagal.
+    Batas badan = part_size + 1 MiB.
+    """
+    job = job_or_404(conn, job_id, ident.user_id)
+    session = dal.upload_session_get(conn, job_id)
+    if session is None or job["state"] != "uploading":
+        raise ApiError(409, "INTERNAL", "Unggahan ini sudah selesai atau dibatalkan.")
+    if not 1 <= part_number <= int(session["part_count"]):
+        raise ApiError(400, "INVALID_FILE", "Nomor potongan di luar rentang.")
+    data = await request.body()
+    if len(data) > settings.part_size + 1024 * 1024:
+        raise ApiError(400, "TOO_LARGE", "Potongan melebihi ukuran yang diizinkan.")
+    if not data:
+        raise ApiError(400, "INVALID_FILE", "Potongan kosong.")
+    try:
+        etag = storage.put_part(job["r2_key"], session["upload_id"],
+                                part_number, data)
+    except StorageError as exc:
+        raise ApiError(503, "INTERNAL", PESAN_GUDANG) from exc
+    return schemas.PartPutResponse(etag=etag)
 
 
 @router.get("/{job_id}", response_model=schemas.UploadStatus)

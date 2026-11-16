@@ -170,46 +170,54 @@ async function requestFile(path: string): Promise<Blob> {
   return res.blob();
 }
 
-/** PUT satu potongan ke penyimpanan bertanda tangan (tanpa cookie, mendukung pembatalan). */
+/** Kirim satu potongan lewat relay API (same-origin, tanpa preflight CORS).
+ * Presigned URL (signPart) dicadangkan untuk R2 + CORS bucket (TK-003). */
 export function putPart(
-  url: string,
+  jobId: string,
+  partNumber: number,
   blob: Blob,
   onProgress?: (loadedBytes: number) => void,
   signal?: AbortSignal,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return (async () => {
     if (signal?.aborted) {
-      reject(new ApiError(0, "Unggahan dibatalkan."));
-      return;
+      throw new ApiError(0, "Unggahan dibatalkan.");
     }
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    const onAbort = () => {
-      xhr.abort();
-      reject(new ApiError(0, "Unggahan dibatalkan."));
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(e.loaded);
-    };
-    xhr.onload = () => {
-      signal?.removeEventListener("abort", onAbort);
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const rawEtag =
-          xhr.getResponseHeader("ETag") ??
-          xhr.getResponseHeader("etag") ??
-          `"part-${blob.size}"`;
-        resolve(rawEtag);
-      } else {
-        reject(new ApiError(xhr.status, pesanUntukStatus(xhr.status)));
+    let res: Response;
+    try {
+      res = await fetch(
+        `${getApiBaseUrl()}/api/uploads/${encodeURIComponent(jobId)}/parts/${partNumber}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: buildHeaders(undefined, false),
+          body: blob,
+          signal,
+        },
+      );
+    } catch {
+      throw new ApiError(0, PESAN_JARINGAN);
+    }
+    captureSessionHeader(res);
+    if (!res.ok) {
+      let code: KodeGalat | undefined;
+      try {
+        const body = (await res.json()) as BadanGalat;
+        if (kodeValid(body.code)) code = body.code;
+      } catch {
+        code = undefined;
       }
-    };
-    xhr.onerror = () => {
-      signal?.removeEventListener("abort", onAbort);
-      reject(new ApiError(0, PESAN_JARINGAN));
-    };
-    xhr.send(blob);
-  });
+      throw new ApiError(
+        res.status,
+        code !== undefined ? pesanUntukKode(code) : pesanUntukStatus(res.status),
+        code,
+      );
+    }
+    const body = (await res.json()) as { etag?: unknown };
+    const etag = typeof body.etag === "string" ? body.etag : "";
+    onProgress?.(blob.size);
+    return etag;
+  })();
 }
 
 export const api = {
@@ -393,9 +401,9 @@ export async function uploadFileMultipart(opts: MultipartUploadOptions): Promise
     for (let attempt = 0; attempt < 2; attempt += 1) {
       if (signal?.aborted) throw new ApiError(0, "Unggahan dibatalkan.");
       try {
-        const signed = await api.signPart(session.job_id, { part_number: partNumber });
         const etag = await putPart(
-          signed.url,
+          session.job_id,
+          partNumber,
           blob,
           (loaded) => {
             loadedPerPart.set(partNumber, loaded);

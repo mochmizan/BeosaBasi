@@ -70,12 +70,10 @@ describe("api client", () => {
   });
 
   it("uploadFileMultipart memakai job_id dan part_number berbasis 1", async () => {
-    const calls: { url: string; body?: unknown }[] = [];
+    const relayCalls: { part: number; bytes: number }[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-        const parsed = init?.body ? JSON.parse(String(init.body)) : undefined;
-        calls.push({ url, body: parsed });
         if (url.endsWith("/api/uploads")) {
           return Promise.resolve({
             ok: true,
@@ -90,16 +88,16 @@ describe("api client", () => {
               }),
           });
         }
-        if (url.endsWith("/api/uploads/job-123/parts")) {
+        const relay = url.match(/\/api\/uploads\/job-123\/parts\/(\d+)$/);
+        if (init?.method === "PUT" && relay) {
+          const part = Number(relay[1]);
+          const blob = init.body as Blob;
+          relayCalls.push({ part, bytes: blob.size });
           return Promise.resolve({
             ok: true,
             status: 200,
             headers: { get: () => null },
-            json: () =>
-              Promise.resolve({
-                url: `https://s3.example.id/put/${parsed.part_number}`,
-                expires_at: "2026-11-16T00:00:00Z",
-              }),
+            json: () => Promise.resolve({ etag: `etag-${part}` }),
           });
         }
         if (url.endsWith("/api/uploads/job-123/complete")) {
@@ -123,24 +121,6 @@ describe("api client", () => {
       }),
     );
 
-    class FakeXHR {
-      status = 200;
-      upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = {
-        onprogress: null,
-      };
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      open() {}
-      getResponseHeader(name: string) {
-        return name.toLowerCase() === "etag" ? '"etag-ok"' : null;
-      }
-      send(blob: Blob) {
-        this.upload.onprogress?.({ lengthComputable: true, loaded: blob.size, total: blob.size });
-        this.onload?.();
-      }
-    }
-    vi.stubGlobal("XMLHttpRequest", FakeXHR);
-
     const file = new File([new Uint8Array(16)], "rekaman.webm", {
       type: "audio/webm;codecs=opus",
     });
@@ -151,11 +131,8 @@ describe("api client", () => {
       concurrency: 3,
     });
     expect(job.job_id).toBe("job-123");
-    const partNumbers = calls
-      .filter((c) => c.url.endsWith("/api/uploads/job-123/parts"))
-      .map((c) => (c.body as { part_number: number }).part_number)
-      .sort();
-    expect(partNumbers).toEqual([1, 2]);
+    expect(relayCalls.map((c) => c.part).sort()).toEqual([1, 2]);
+    expect(relayCalls.reduce((n, c) => n + c.bytes, 0)).toBe(16);
   });
 
   it("memetakan badan galat kontrak ke ApiError Indonesia", async () => {

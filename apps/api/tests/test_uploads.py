@@ -35,7 +35,7 @@ def test_part_size_count_and_resume(client, storage):
     assert signed.status_code == 200
     assert signed.json()["url"].startswith("memory://upload/")
 
-    storage.put_part(session["upload_id"], 1, b"ID3" + b"\x00" * 10)
+    storage.put_part(storage.key_for(session["upload_id"]), session["upload_id"], 1, b"ID3" + b"\x00" * 10)
     status = client.get(f"/api/uploads/{session['job_id']}")
     assert status.json()["parts_done"] == [1]
     assert status.json()["parts_total"] == 3
@@ -54,7 +54,7 @@ def test_interrupted_upload_resumes_without_restart(client, storage):
     upload_id = session["upload_id"]
 
     first = payload[:part_size]
-    etag = storage.put_part(upload_id, 1, first)
+    etag = storage.put_part(storage.key_for(upload_id), upload_id, 1, first)
     assert client.get(f"/api/uploads/{session['job_id']}").json()["parts_done"] == [1]
     interrupted = client.post(f"/api/uploads/{session['job_id']}/complete",
                               json={"parts": [{"part_number": 1, "etag": etag}]})
@@ -64,7 +64,7 @@ def test_interrupted_upload_resumes_without_restart(client, storage):
     for number in (2, 3):
         chunk = payload[(number - 1) * part_size: number * part_size]
         parts.append({"part_number": number,
-                      "etag": storage.put_part(upload_id, number, chunk)})
+                      "etag": storage.put_part(storage.key_for(upload_id), upload_id, number, chunk)})
     resp = client.post(f"/api/uploads/{session['job_id']}/complete",
                        json={"parts": parts})
     assert resp.status_code == 200, resp.text
@@ -89,7 +89,7 @@ def test_magic_bytes_reject_and_delete_object(client, storage):
     started = init_upload(client, size=128)
     session = started["body"]
     junk = b"not-an-audio-file" * 8
-    etag = storage.put_part(session["upload_id"], 1, junk)
+    etag = storage.put_part(storage.key_for(session["upload_id"]), session["upload_id"], 1, junk)
     resp = client.post(f"/api/uploads/{session['job_id']}/complete",
                        json={"parts": [{"part_number": 1, "etag": etag}]})
     assert resp.status_code == 400
@@ -104,7 +104,7 @@ def test_magic_bytes_reject_and_delete_object(client, storage):
 def test_etag_mismatch_rejected(client, storage):
     started = init_upload(client, size=128)
     session = started["body"]
-    storage.put_part(session["upload_id"], 1, _valid_audio(128))
+    storage.put_part(storage.key_for(session["upload_id"]), session["upload_id"], 1, _valid_audio(128))
     resp = client.post(f"/api/uploads/{session['job_id']}/complete",
                        json={"parts": [{"part_number": 1, "etag": "deadbeef"}]})
     assert resp.status_code == 400
@@ -197,3 +197,43 @@ def test_session_token_header_fallback_preserves_identity(client):
     second = client.get("/api/me", headers={"X-Session-Token": token})
     assert second.status_code == 200
     assert second.json()["user_id"] == uid
+
+
+def test_relay_put_part_then_complete(client, storage):
+    size = 20 * 1024 * 1024  # 3 parts
+    started = init_upload(client, size=size)
+    session = started["body"]
+    payload = _valid_audio(size)
+    etags = []
+    for number in range(1, session["part_count"] + 1):
+        chunk = payload[(number - 1) * session["part_size"]:number * session["part_size"]]
+        resp = client.put(f"/api/uploads/{session['job_id']}/parts/{number}",
+                          content=chunk,
+                          headers={"Content-Type": "application/octet-stream"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["etag"]
+        etags.append({"part_number": number, "etag": resp.json()["etag"]})
+    done = client.get(f"/api/uploads/{session['job_id']}")
+    assert done.json()["parts_done"] == [1, 2, 3]
+    completed = client.post(f"/api/uploads/{session['job_id']}/complete",
+                            json={"parts": etags})
+    assert completed.status_code == 200
+    assert completed.json()["state"] == "queued"
+
+
+def test_relay_rejects_out_of_range_part(client):
+    started = init_upload(client, size=1024)
+    session = started["body"]
+    resp = client.put(f"/api/uploads/{session['job_id']}/parts/99",
+                      content=b"x" * 10)
+    assert resp.status_code == 400
+
+
+def test_relay_rejects_oversize_and_empty_part(client):
+    started = init_upload(client, size=1024)
+    session = started["body"]
+    big = client.put(f"/api/uploads/{session['job_id']}/parts/1",
+                     content=b"x" * (10 * 1024 * 1024))
+    assert big.status_code == 400
+    empty = client.put(f"/api/uploads/{session['job_id']}/parts/1", content=b"")
+    assert empty.status_code == 400

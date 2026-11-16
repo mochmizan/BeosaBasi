@@ -82,6 +82,11 @@ export interface PartSignResponse {
   expires_at: string;
 }
 
+export interface PartPutResponse {
+  /** ETag potongan untuk dipakai di complete */
+  etag: string;
+}
+
 export interface UploadStatus {
   job_id: string;
   state: JobState;

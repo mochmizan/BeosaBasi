@@ -42,6 +42,11 @@ class Storage(Protocol):
     def sign_part(self, key: str, upload_id: str, part_number: int,
                   ttl_seconds: int) -> tuple[str, datetime]: ...
 
+    def put_part(self, key: str, upload_id: str, part_number: int,
+                 data: bytes) -> str:
+        """Upload one part server-side (relay); return the ETag."""
+        ...
+
     def list_parts(self, key: str, upload_id: str) -> list[PartInfo]: ...
 
     def complete_multipart(self, key: str, upload_id: str,
@@ -115,6 +120,17 @@ class S3Storage:
         except Exception as exc:
             raise StorageError(str(exc)) from exc
         return url, _iso_plus(ttl_seconds)
+
+    def put_part(self, key: str, upload_id: str, part_number: int,
+                 data: bytes) -> str:
+        try:
+            resp = self.client.upload_part(
+                Bucket=self.bucket, Key=key, UploadId=upload_id,
+                PartNumber=part_number, Body=data,
+            )
+        except Exception as exc:
+            raise StorageError(str(exc)) from exc
+        return str(resp.get("ETag", "")).strip('"')
 
     def list_parts(self, key: str, upload_id: str) -> list[PartInfo]:
         parts: list[PartInfo] = []
@@ -269,8 +285,14 @@ class MemoryStorage:
         self._objects: dict[str, _MemoryObject] = {}
 
     # -- helpers used by tests -------------------------------------------
-    def put_part(self, upload_id: str, part_number: int, data: bytes) -> str:
+    def key_for(self, upload_id: str) -> str:
+        return self._uploads[upload_id].key
+
+    def put_part(self, key: str, upload_id: str, part_number: int,
+                 data: bytes) -> str:
         upload = self._uploads[upload_id]
+        if upload.key != key:
+            raise StorageError("NoSuchUpload")
         upload.parts[part_number] = data
         return _etag(data)
 
@@ -365,6 +387,7 @@ class NullStorage:
 
     create_multipart = _fail
     sign_part = _fail
+    put_part = _fail
     list_parts = _fail
     complete_multipart = _fail
     abort_multipart = _fail
