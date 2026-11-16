@@ -237,3 +237,18 @@ def test_relay_rejects_oversize_and_empty_part(client):
     assert big.status_code == 400
     empty = client.put(f"/api/uploads/{session['job_id']}/parts/1", content=b"")
     assert empty.status_code == 400
+
+
+def test_relay_preflight_allows_put_from_web_origin(client):
+    started = init_upload(client, size=1024)
+    session = started["body"]
+    resp = client.options(
+        f"/api/uploads/{session['job_id']}/parts/1",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "content-type,x-session-token",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert "PUT" in resp.headers.get("access-control-allow-methods", "")
