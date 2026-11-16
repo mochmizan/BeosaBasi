@@ -41,6 +41,17 @@ karena `/home/ubuntu` tak terbaca oleh `beosabasi`):
 7. Asap: `upload → PUT presigned → complete → claim` hijau;
    e2e penuh (transkripsi tiny + baca transkrip) hijau.
 
+## Unggahan: relay same-origin (interim, 16 Nov 2026)
+
+Peramban **tidak** PUT langsung ke penyimpanan: Garage (R2 stand-in)
+tidak menjawab preflight CORS OPTIONS, sehingga semua PUT presigned
+dari browser mati `ERR_FAILED` (terbukti dari console). Arus unggah:
+`POST /api/uploads` → `PUT /api/uploads/{id}/parts/{n}` per 8 MiB
+(relay server-side via boto3, same-origin → tanpa preflight) →
+`POST .../complete`. Presigned `signPart` dicadangkan untuk R2 + CORS
+bucket saat TK-003 tiba (kembalikan klien ke presigned agar VPS tak
+memproxy byte, sesuai PRD 4.6).
+
 ## Tunnel berganti (quick tunnel tidak stabil)
 
 Quick tunnel Cloudflare berganti URL tiap restart. Prosedurnya otomatis:
