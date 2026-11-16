@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import sqlite3
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -93,7 +94,7 @@ def create_app(settings: Settings | None = None,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["ETag"],
+        expose_headers=["ETag", "X-Session-Token"],
     )
     install_middleware(app)
     register_error_handlers(app)
@@ -118,6 +119,16 @@ def create_app(settings: Settings | None = None,
 
     @app.get("/healthz", response_model=schemas.Health)
     def healthz() -> schemas.Health:
-        return schemas.Health(status=health_status()["status"])
+        conn = connect(settings.db_path)
+        try:
+            active = jobs._worker_active(conn, settings)
+        except sqlite3.Error:
+            active = False
+        finally:
+            conn.close()
+        return schemas.Health(
+            status=health_status()["status"],
+            worker_active=active,
+        )
 
     return app

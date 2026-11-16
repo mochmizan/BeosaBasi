@@ -5,10 +5,9 @@ import {
   Clock,
   FileAudio,
   FileText,
-  Flame,
   Gauge,
   Loader2,
-  ShieldCheck,
+  Lock,
   Sparkles,
   Timer,
   TrendingUp,
@@ -18,26 +17,13 @@ import {
 import { useStudio } from "../components/studio";
 import { statusMeta, uiJobCard } from "../lib/adapters";
 
-const weekly = [
-  { day: "Sen", minutes: 18 },
-  { day: "Sel", minutes: 34 },
-  { day: "Rab", minutes: 12 },
-  { day: "Kam", minutes: 46 },
-  { day: "Jum", minutes: 28 },
-  { day: "Sab", minutes: 52 },
-  { day: "Min", minutes: 24 },
-];
-
-const languages = [
-  { name: "Indonesia", value: 86, color: "var(--accent)" },
-  { name: "Inggris", value: 9, color: "var(--sky)" },
-  { name: "Campur", value: 5, color: "var(--mint)" },
-];
+const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
 const retention = [
-  { label: "Audio mentah", note: "Dihapus otomatis setelah job selesai", value: "≤ 24 jam" },
-  { label: "Transkrip", note: "Bisa diedit, diekspor, atau dihapus lebih awal", value: "30 hari" },
-  { label: "Data pelatihan", note: "Tidak pernah dipakai melatih model", value: "Tidak ada" },
+  { label: "Audio mentah", note: "Dihapus otomatis setelah job selesai/gagal", value: "≤ 24 jam" },
+  { label: "Transkrip", note: "Bisa disunting, diekspor, atau dihapus lebih awal", value: "30 hari" },
+  { label: "Sesi peramban", note: "Anonim via cookie/token lokal tanpa akun", value: "90 hari" },
+  { label: "Data pelatihan", note: "Tidak pernah dipakai melatih model AI", value: "Tidak ada" },
 ];
 
 const toneVar: Record<string, string> = {
@@ -49,14 +35,65 @@ const toneVar: Record<string, string> = {
 };
 
 export default function InsightsPage() {
-  const { jobs, quota, navigate } = useStudio();
+  const { jobs, quota, navigate, goJob } = useStudio();
   const uiJobs = useMemo(() => jobs.map(uiJobCard), [jobs]);
 
-  const max = Math.max(...weekly.map((d) => d.minutes));
-  const weekTotal = weekly.reduce((acc, d) => acc + d.minutes, 0);
+  // Hitung distribusi 7 hari terakhir dari data job nyata pengguna
+  const weekly = useMemo(() => {
+    const now = new Date();
+    const buckets: { key: string; day: string; minutes: number }[] = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      buckets.push({
+        key,
+        day: DAY_NAMES[d.getDay()],
+        minutes: 0,
+      });
+    }
+    for (const job of jobs) {
+      const dateKey = (job.created_at || "").slice(0, 10);
+      const bucket = buckets.find((b) => b.key === dateKey);
+      if (bucket) {
+        const mins =
+          job.billed_minutes && job.billed_minutes > 0
+            ? job.billed_minutes
+            : (job.duration_seconds ?? 0) / 60;
+        bucket.minutes = Math.round((bucket.minutes + mins) * 10) / 10;
+      }
+    }
+    return buckets;
+  }, [jobs]);
+
+  const max = Math.max(1, ...weekly.map((d) => d.minutes));
+  const weekTotal = Math.round(weekly.reduce((acc, d) => acc + d.minutes, 0) * 10) / 10;
   const completed = uiJobs.filter((job) => job.status === "completed");
   const active = uiJobs.filter((job) => ["queued", "processing"].includes(job.status)).length;
+  const diarizedCount = jobs.filter((j) => j.diarization).length;
+  const totalAudioMinutes = Math.round(
+    completed.reduce((acc, j) => acc + j.seconds / 60, 0) * 10,
+  ) / 10;
   const pct = Math.min(100, Math.round((quota.used / quota.minutes) * 100));
+
+  const languages = useMemo(() => {
+    const total = Math.max(1, jobs.length);
+    const idCount = jobs.filter((j) => j.language === "id").length;
+    const enCount = jobs.filter((j) => j.language === "en").length;
+    const autoCount = jobs.filter((j) => j.language === "auto").length;
+    if (jobs.length === 0) {
+      return [
+        { name: "Indonesia", value: 100, color: "var(--accent)" },
+        { name: "Inggris", value: 0, color: "var(--sky)" },
+        { name: "Otomatis", value: 0, color: "var(--mint)" },
+      ];
+    }
+    return [
+      { name: "Indonesia", value: Math.round((idCount / total) * 100), color: "var(--accent)" },
+      { name: "Inggris", value: Math.round((enCount / total) * 100), color: "var(--sky)" },
+      { name: "Otomatis", value: Math.round((autoCount / total) * 100), color: "var(--mint)" },
+    ];
+  }, [jobs]);
 
   const statusCounts = ["completed", "queued", "processing", "failed", "expired"].map((key) => ({
     key,
@@ -70,7 +107,7 @@ export default function InsightsPage() {
     {
       label: "Kuota hari ini",
       value: `${quota.used}/${quota.minutes}`,
-      suffix: "menit",
+      suffix: "menit terpakai",
       icon: Clock,
       delta: `reset ${quota.reset}`,
       tone: "coral",
@@ -80,23 +117,23 @@ export default function InsightsPage() {
       value: `${completed.length}`,
       suffix: `dari ${uiJobs.length} job`,
       icon: FileText,
-      delta: `${active} masih berjalan`,
+      delta: `${active} sedang aktif`,
       tone: "mint",
     },
     {
-      label: "Median xRT",
-      value: "9,4×",
-      suffix: "lebih cepat dari real-time",
+      label: "Durasi transkrip",
+      value: `${totalAudioMinutes}`,
+      suffix: "menit audio selesai",
       icon: Gauge,
       delta: "whisper-large-v3-turbo",
       tone: "violet",
     },
     {
-      label: "Rasio edit",
-      value: "3,2%",
-      suffix: "kata disunting",
+      label: "Diarisasi pembicara",
+      value: `${diarizedCount}`,
+      suffix: "job berlabel pembicara",
       icon: Sparkles,
-      delta: "dari total kata",
+      delta: "2× kuota saat aktif",
       tone: "amber",
     },
   ];
@@ -110,7 +147,8 @@ export default function InsightsPage() {
             Kuota dan <em>pemakaian.</em>
           </h1>
           <p className="page-sub">
-            Pantau menit yang terpakai, antrean, dan retensi data tujuh hari terakhir.
+            Pantau menit kuota harian (60 menit/hari), status antrean, dan retensi otomatis di sesi
+            peramban ini.
           </p>
         </div>
         <div className="range-chip">
@@ -142,20 +180,32 @@ export default function InsightsPage() {
         <section className="panel chart-panel">
           <div className="panel-title-row">
             <div>
-              <h3>Menit ditranskripsi</h3>
-              <p>Rata-rata {Math.round(weekTotal / weekly.length)} menit per hari</p>
+              <h3>Menit diproses (7 hari terakhir)</h3>
+              <p>
+                {weekTotal > 0
+                  ? `Rata-rata ${Math.round((weekTotal / 7) * 10) / 10} menit per hari`
+                  : "Belum ada menit terpakai dalam 7 hari terakhir"}
+              </p>
             </div>
             <div className="chart-legend">
-              <i /> Menit audio
+              <i /> Menit kuota
             </div>
           </div>
 
           <div className="bar-chart">
             {weekly.map((d) => (
-              <div key={d.day} className={`bar-col ${d.minutes === max ? "is-peak" : ""}`}>
+              <div
+                key={d.key}
+                className={`bar-col ${d.minutes > 0 && d.minutes === max ? "is-peak" : ""}`}
+              >
                 <span className="bar-value">{d.minutes}</span>
                 <div className="bar-track">
-                  <div className="bar" style={{ height: `${(d.minutes / max) * 100}%` }} />
+                  <div
+                    className="bar"
+                    style={{
+                      height: `${d.minutes > 0 ? Math.max(8, (d.minutes / max) * 100) : 4}%`,
+                    }}
+                  />
                 </div>
                 <span className="bar-day">{d.day}</span>
               </div>
@@ -164,7 +214,7 @@ export default function InsightsPage() {
 
           <div className="chart-foot">
             <span>
-              <Flame size={14} /> 5 hari berturut-turut mengunggah
+              <Clock size={14} /> Dihitung per tanggal WIB (UTC+7)
             </span>
             <span className="chart-total">{weekTotal} menit total</span>
           </div>
@@ -202,7 +252,7 @@ export default function InsightsPage() {
               </div>
               <div>
                 <span>Sisa kuota</span>
-                <b>{quota.minutes - quota.used} menit</b>
+                <b>{Math.max(0, Math.round((quota.minutes - quota.used) * 10) / 10)} menit</b>
               </div>
               <div>
                 <span>Antrean</span>
@@ -213,15 +263,15 @@ export default function InsightsPage() {
 
           <div className="quota-facts">
             <span>
-              <Users size={12} /> Diarisasi memakai 2× kuota
+              <Users size={12} /> Diarisasi memakai 2× kuota (dikembalikan bila gagal)
             </span>
             <span>
-              <ShieldCheck size={12} /> Audio ≤24 jam · transkrip 30 hari
+              <Lock size={12} /> Audio ≤24 jam · transkrip 30 hari
             </span>
           </div>
 
           <button className="btn btn-ghost btn-sm quota-cta" onClick={() => navigate("settings")}>
-            Kelola kuota & privasi <ArrowUpRight size={13} />
+            Atur preferensi & sesi <ArrowUpRight size={13} />
           </button>
         </section>
       </div>
@@ -231,7 +281,7 @@ export default function InsightsPage() {
           <div className="panel-title-row">
             <div>
               <h3>Status job</h3>
-              <p>{uiJobs.length} job di ruang kerja</p>
+              <p>{uiJobs.length} job di sesi ini</p>
             </div>
             <Timer size={15} className="panel-glyph" />
           </div>
@@ -264,11 +314,11 @@ export default function InsightsPage() {
         <section className="panel retention-panel">
           <div className="panel-title-row">
             <div>
-              <h3>Retensi data</h3>
-              <p>Otomatis, tanpa perlu tindakan</p>
+              <h3>Retensi & privasi teknis</h3>
+              <p>Berjalan otomatis di server</p>
             </div>
             <span className="pill-soft">
-              <ShieldCheck size={11} /> privasi
+              <Lock size={11} /> otomatis
             </span>
           </div>
 
@@ -289,28 +339,42 @@ export default function InsightsPage() {
           <div className="panel-title-row">
             <div>
               <h3>Job terakhir</h3>
-              <p>Empat unggahan terbaru</p>
+              <p>Unggahan & rekaman terbaru</p>
             </div>
           </div>
-          <ul className="mini-list">
-            {uiJobs.slice(0, 4).map((job) => {
-              const meta = statusMeta(job.status);
-              return (
-                <li key={job.id}>
-                  <span className={`mini-icon tone-${meta.tone}`}>
-                    {job.status === "processing" ? <Loader2 size={14} /> : <FileAudio size={14} />}
-                  </span>
-                  <span className="mini-copy">
-                    <b>{job.title}</b>
-                    <span>
-                      {meta.label} · {job.duration}
+          {uiJobs.length > 0 ? (
+            <ul className="mini-list">
+              {uiJobs.slice(0, 4).map((job) => {
+                const meta = statusMeta(job.status);
+                return (
+                  <li
+                    key={job.id}
+                    onClick={() => goJob(job.id)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <span className={`mini-icon tone-${meta.tone}`}>
+                      {job.status === "processing" ? (
+                        <Loader2 size={14} className="spin" />
+                      ) : (
+                        <FileAudio size={14} />
+                      )}
                     </span>
-                  </span>
-                  <span className={`mini-acc tone-${meta.tone}`}>{job.format}</span>
-                </li>
-              );
-            })}
-          </ul>
+                    <span className="mini-copy">
+                      <b>{job.title}</b>
+                      <span>
+                        {meta.label} · {job.duration}
+                      </span>
+                    </span>
+                    <span className={`mini-acc tone-${meta.tone}`}>{job.format}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="side-empty-note" style={{ marginTop: 12 }}>
+              Belum ada job yang tercatat di sesi ini.
+            </p>
+          )}
           <div className="recent-foot">
             <span>{uiJobs.length} job tersimpan</span>
             <button className="btn btn-ghost btn-sm" onClick={() => navigate("library")}>

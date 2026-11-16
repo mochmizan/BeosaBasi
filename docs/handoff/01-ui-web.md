@@ -1,45 +1,22 @@
-# 01 — UI / Web (no login)
+# 01 — UI / Web (no login, anonymous-first)
 
 Scope: record OR upload → status → transcript + speaker names → export. Anonymous. Indonesian messages.
 
-## Status — UI merged (mockup → apps/web)
+## Status — Fully Fleshed Out (`TK-040`, `TK-042`, `TK-043`, `TK-044`, `TK-045`, `TK-046` DONE)
 
-The full studio UI from the design mockup now lives in `apps/web` and is wired to
-the contract client:
+The full anonymous-first studio UI in `apps/web` is wired to the real backend contract:
 
-- Shell: sidebar (macaw logo, BEOSABASI, quota, recent jobs), topbar (search,
-  theme, worker chip), blue hill/grain scene with birds + red flowers, command
-  palette (`Ctrl/⌘ K`), toast, privacy modal.
-- Pages: `/` studio (uploader + transcript), `/jobs` library, `/jobs/:id` detail,
-  `/insights`, `/settings`, 404.
-- Wired endpoints: `GET /api/me`, `GET /api/jobs` (8 s poll), `GET /api/jobs/{id}`
-  (4 s poll while queued/processing), `GET /transcript`, `GET /audio-url`,
-  `PATCH /segments/{n}`, `PATCH /speakers/{sid}`, `GET /export`, `DELETE /jobs/{id}`,
-  `POST/DELETE /api/consents`, and the multipart upload flow
-  (`POST /api/uploads` → `POST /parts` → `PUT` → `POST /complete`).
-- Dev: Prism validates the `beosabasi_session` cookie; `main.tsx` sets a dev-only
-  cookie so `npm run mock:api` works without Google login.
-- Dev: `agentation` toolbar is mounted in `Layout.tsx` only when
-  `import.meta.env.DEV` (tree-shaken from production builds).
-
-Still open for TK-042/044/045: real Turnstile token, 3× parallel 8 MiB chunks +
-`ListParts` resume, debounced autosave (currently saves on blur/Enter), R2 CORS
-must expose `ETag`, and `MediaRecorder` capture.
-
-## Tasks in order
-1. `TK-040` — DONE (scaffold + typed client + mock:api). Don't redo.
-2. `TK-042` — record/upload + quota. `MediaRecorder` + file picker, 8MiB chunks x3 parallel, `ListParts` resume, Turnstile stub. Files: `apps/web/src/pages/HomePage.tsx`, `apps/web/src/components/Uploader.tsx`, `apps/web/src/api/`.
-3. `TK-043` — jobs list + status. Poll 5s, queued/processing/completed/failed, worker-offline notice. Files: `apps/web/src/pages/JobsPage.tsx`, `apps/web/src/pages/JobDetailPage.tsx`.
-4. `TK-044` — editor synced. Click segment seeks audio ±1s, low-confidence highlight, autosave ≤5s, rename/move speaker. Then `TK-045` export + delete. Files: `apps/web/src/components/Transcript.tsx`, `apps/web/src/lib/useJobTranscript.ts`.
-
-## Mock / verify
-```
-npm run mock:api   # Prism :4010 from contracts/openapi.yaml
-npm run dev        # :5173 vs mock
-npm test -- --run && npm run lint && npm run build
-```
-
-## Rules
-- API base from `VITE_API_BASE_URL` (`:4010` dev, `https://api.<domain>` prod). No hardcoded URLs.
-- Contract change → `make gen-client`, tick `docs/CHECKLIST.md` in same PR.
-
+- **Zero Account / Policy Remnants**: No login, no profile/avatar cards, no allowlist/invitation text, and no blocking consent modal or policy pages (`PrivacyConsent.tsx` removed). Session identity uses the `beosabasi_session` HttpOnly cookie with an automatic `X-Session-Token` header fallback (`localStorage`) so cross-origin Cloudflare quick tunnels and mobile browsers preserve job ownership.
+- **Dual Input Studio (`Uploader.tsx`)**:
+  - **Web Audio Recorder (`Rekam suara`)**: Direct in-browser microphone recording via `MediaRecorder` + live Web Audio API frequency analyser waveform, pause/resume/stop controls, editable recording title, audio preview player, local audio download, and one-click transcription submission without manual file upload.
+  - **Resumable Multipart Uploader (`Unggah berkas`)**: 3× parallel 8 MiB chunk uploads (`uploadFileMultipart`), `1..part_count` indexing via `session.job_id`, pre-upload `<audio>` duration probing (90-minute cap & quota hint), and `ListParts` (`GET /api/uploads/{id}`) resume button on network interruption.
+- **Honest Queue & Worker Status (`TK-043`)**: Polls `GET /api/jobs` (5 s), `GET /api/jobs/{id}` (3–4 s while active), and `GET /healthz` (`worker_active` boolean). Displays live `queue_position`, `eta_seconds`, and an explicit `"Pemrosesan tertunda (pekerja offline)"` notice whenever the laptop GPU worker has not pinged within 90 s.
+- **Synced Transcript Editor (`TK-044`, `TK-046`)**:
+  - Click any segment or timestamp to seek audio (`±0.1 s`), with `-5 s / +5 s` skip buttons and playback speed selector (`0.75×` to `2×`).
+  - Debounced autosave (`≤ 2 s` while typing, plus immediate save on `Blur`/`Enter`) with live save status indicator (`Menyimpan…` / `Tersimpan otomatis`) and `409 VERSION_CONFLICT` recovery.
+  - Inline transcript search bar, speaker filter dropdown, and low-confidence (`< 85%`) segment filter.
+  - Speaker rename (`PATCH /speakers/{sid}`) and per-segment speaker reassignment (`PATCH /segments/{n}`).
+- **Exports, Real Insights & Mobile View (`TK-045`)**:
+  - Export `TXT`, `SRT`, `VTT`, `DOCX` with optional speaker-label toggle, plus inline confirmation for per-job deletion (`DELETE /api/jobs/{id}`) and local browser session reset (`DELETE /api/me`).
+  - `InsightsPage.tsx` computes 7-day usage bars and language distribution directly from the user's real `jobs`.
+  - Mobile-first bottom navigation bar (`Studio`, `Rekam`, `Pustaka`, `Kuota`, `Setelan`) for viewports `≤ 760px`.

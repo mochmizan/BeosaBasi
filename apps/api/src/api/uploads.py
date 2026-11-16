@@ -32,6 +32,11 @@ router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 PESAN_GUDANG = "Penyimpanan audio sedang tidak tersedia. Coba lagi sebentar."
 
 
+def _normalize_mime(content_type: str) -> str:
+    """Strip codec parameters (e.g. audio/webm;codecs=opus -> audio/webm)."""
+    return (content_type or "").split(";", 1)[0].strip().lower()
+
+
 def _verify_turnstile(token: str, settings: Settings) -> None:
     if not token or not token.strip():
         raise ApiError(400, "INVALID_FILE", "Verifikasi Turnstile diperlukan.")
@@ -52,11 +57,12 @@ def _verify_turnstile(token: str, settings: Settings) -> None:
                        "Verifikasi Turnstile gagal. Muat ulang halaman lalu coba lagi.")
 
 
-def _validate_init(body: schemas.UploadInit, settings: Settings) -> None:
+def _validate_init(body: schemas.UploadInit, settings: Settings) -> str:
     extension = extension_of(body.filename)
     if extension not in ALLOWED_EXTENSIONS:
         raise ApiError(400, "UNSUPPORTED_TYPE")
-    if body.content_type not in ALLOWED_CONTENT_TYPES:
+    mime = _normalize_mime(body.content_type)
+    if mime not in ALLOWED_CONTENT_TYPES:
         raise ApiError(400, "UNSUPPORTED_TYPE")
     if body.size_bytes > settings.max_upload_bytes:
         raise ApiError(400, "TOO_LARGE",
@@ -72,6 +78,7 @@ def _validate_init(body: schemas.UploadInit, settings: Settings) -> None:
             and body.min_speakers > body.max_speakers):
         raise ApiError(400, "INVALID_FILE",
                        "Jumlah pembicara minimum melebihi maksimum.")
+    return mime
 
 
 @router.post("", response_model=schemas.UploadSession, status_code=201)
@@ -81,7 +88,7 @@ def init_upload(body: schemas.UploadInit, response: HttpResponse,
                 settings: Settings = Depends(get_settings),
                 storage: Storage = Depends(get_storage)) -> schemas.UploadSession:
     del response
-    _validate_init(body, settings)
+    mime = _validate_init(body, settings)
     _verify_turnstile(body.turnstile_token, settings)
     ratelimit.enforce(conn, f"upload:{ident.ip_hash}",
                       settings.upload_initiations_per_hour)
@@ -104,7 +111,7 @@ def init_upload(body: schemas.UploadInit, response: HttpResponse,
     part_size = settings.part_size
     part_count = max(1, math.ceil(body.size_bytes / part_size))
     try:
-        upload_id = storage.create_multipart(key, body.content_type)
+        upload_id = storage.create_multipart(key, mime)
     except StorageError as exc:
         raise ApiError(503, "INTERNAL", PESAN_GUDANG) from exc
 

@@ -18,6 +18,7 @@ export default function JobDetailPage() {
     audioUrl,
     error,
     loading,
+    saveStatus,
     editSegment,
     reassign,
     renameSpeaker,
@@ -78,6 +79,7 @@ export default function JobDetailPage() {
           segments={parsed.segments}
           speakers={parsed.speakers}
           audioUrl={audioUrl}
+          saveStatus={saveStatus}
           onEditSegment={editSegment}
           onReassign={reassign}
           onRenameSpeaker={renameSpeaker}

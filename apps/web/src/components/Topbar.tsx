@@ -1,10 +1,10 @@
 import {
   ArrowRight,
-  Bell,
   ChevronRight,
   Clock,
   FileAudio,
   Menu,
+  Mic,
   Moon,
   Search,
   Sun,
@@ -25,13 +25,15 @@ export default function Topbar({
   workerOnline,
   onPalette,
   onMenu,
+  onQuickRecord,
 }: {
   view: string;
   workerOnline: boolean;
   onPalette: () => void;
   onMenu: () => void;
+  onQuickRecord: () => void;
 }) {
-  const { query, setQuery, searchResults, selectJob, theme, toggleTheme, profile } = useStudio();
+  const { query, setQuery, searchResults, selectJob, theme, toggleTheme, refreshHealth } = useStudio();
 
   return (
     <header className="topbar">
@@ -99,20 +101,29 @@ export default function Topbar({
       </div>
 
       <div className="top-actions">
-        <div
+        <button
+          className="topbar-rec-btn"
+          onClick={onQuickRecord}
+          title="Rekam suara dari mikrofon"
+        >
+          <Mic size={14} />
+          <span>Rekam</span>
+        </button>
+        <button
           className={`model-chip ${workerOnline ? "" : "is-offline"}`}
-          title={workerOnline ? "Pekerja transkripsi online" : "Pekerja transkripsi offline"}
+          onClick={refreshHealth}
+          title={
+            workerOnline
+              ? "Pekerja GPU online (klik untuk segarkan)"
+              : "Pekerja GPU offline — job tetap masuk antrean"
+          }
         >
           <span className="model-pulse" />
-          large-v3-turbo
-        </div>
+          <span>{workerOnline ? "large-v3-turbo" : "pekerja tertunda"}</span>
+        </button>
         <button className="icon-btn" onClick={toggleTheme} aria-label="Ganti tema">
           {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
         </button>
-        <button className="icon-btn has-dot" aria-label="Notifikasi">
-          <Bell size={17} />
-        </button>
-        <span className="avatar avatar-sm">{profile.initials}</span>
       </div>
     </header>
   );

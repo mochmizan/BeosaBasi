@@ -6,21 +6,26 @@ import {
   Clock,
   Copy,
   Download,
+  FastForward,
   FileAudio,
   FileText,
   FileType2,
+  Filter,
   Globe2,
   Loader2,
   Lock,
   Pause,
   Pencil,
   Play,
+  Rewind,
   RotateCcw,
-  ShieldCheck,
+  Search,
   Sparkles,
   Timer,
+  Trash2,
   UserRound,
   Users,
+  WifiOff,
   X,
   XCircle,
 } from "lucide-react";
@@ -34,6 +39,7 @@ import {
   type UiSegment,
   type UiSpeaker,
 } from "../lib/ui";
+import type { SaveStatus } from "../lib/useJobTranscript";
 
 export interface TranscriptJob extends UiJobBase {
   queuePosition?: number | null;
@@ -49,10 +55,13 @@ export interface TranscriptJob extends UiJobBase {
 
 const EXPORTS = [
   { id: "txt", label: "TXT", desc: "Teks polos dengan timestamp dan nama pembicara." },
-  { id: "srt", label: "SRT", desc: "Subtitle untuk editor video dan pemutar media." },
+  { id: "srt", label: "SRT", desc: "Subtitle SubRip untuk editor video dan pemutar media." },
   { id: "vtt", label: "VTT", desc: "WebVTT untuk pemutar web dan platform e-learning." },
   { id: "docx", label: "DOCX", desc: "Dokumen Word siap diedit dan dibagikan." },
 ] as const;
+
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2] as const;
+const AUTOSAVE_MS = 2000;
 
 type ExportFormat = (typeof EXPORTS)[number]["id"];
 export type { ExportFormat };
@@ -73,15 +82,20 @@ function StatusBody({
   onToast: (message: string) => void;
 }) {
   const meta = STATUS[job.status] ?? STATUS.queued;
+  const workerOffline = job.workerActive === false;
 
   if (job.status === "queued") {
     return (
-      <div className="job-state">
+      <div className="job-state is-wide">
         <span className="job-state-icon is-amber">
           <Timer size={26} />
         </span>
-        <h3>Menunggu antrean</h3>
-        <p>{meta.note} Posisi dan perkiraan waktu bisa berubah sesuai beban pekerja.</p>
+        <h3>{workerOffline ? "Pemrosesan tertunda (pekerja offline)" : "Menunggu antrean"}</h3>
+        <p>
+          {workerOffline
+            ? "Perangkat pekerja GPU sedang mati. Job kamu aman di antrean dan akan jalan otomatis begitu perangkat aktif."
+            : `${meta.note} Posisi dan perkiraan waktu diperbarui otomatis tiap beberapa detik.`}
+        </p>
         <div className="job-state-stats">
           <div>
             <span>Posisi</span>
@@ -89,20 +103,29 @@ function StatusBody({
           </div>
           <div>
             <span>Perkiraan mulai</span>
-            <b>{job.eta ?? "±3 menit"}</b>
+            <b>{workerOffline ? "Menunggu pekerja" : job.eta ?? "±2 menit"}</b>
           </div>
           <div>
             <span>Durasi audio</span>
             <b>{job.duration}</b>
           </div>
         </div>
+        {workerOffline ? (
+          <div className="offline-note">
+            <WifiOff size={16} />
+            <p>
+              <b>Tidak ada status “diproses” palsu.</b> Job menunggu sampai pekerja berdetak kembali
+              (maksimal 72 jam).
+            </p>
+          </div>
+        ) : null}
         <div className="job-state-actions">
           <button className="btn btn-ghost btn-sm" onClick={() => onDeleteJob(job.id)}>
-            <X size={14} /> Hapus job
+            <X size={14} /> Batalkan & hapus job
           </button>
         </div>
         <p className="job-state-note">
-          <Lock size={12} /> Audio menunggu di penyimpanan sementara, maksimal 24 jam.
+          <Lock size={12} /> Audio menunggu di penyimpanan sementara, maksimal 24 jam setelah selesai.
         </p>
       </div>
     );
@@ -163,14 +186,14 @@ function StatusBody({
         <p>{job.error ?? "Terjadi kesalahan saat memproses audio."}</p>
         <div className="job-state-actions">
           <button className="btn btn-primary btn-sm" onClick={() => onNavigate("home")}>
-            <RotateCcw size={14} /> Unggah ulang
+            <RotateCcw size={14} /> Coba lagi
           </button>
           <button className="btn btn-ghost btn-sm" onClick={() => onDeleteJob(job.id)}>
             Hapus dari pustaka
           </button>
         </div>
         <p className="job-state-note">
-          <ShieldCheck size={12} /> Tidak ada transkrip yang dibuat. Audio gagal sudah dihapus.
+          <Lock size={12} /> Tidak ada transkrip yang disimpan. Audio gagal dihapus otomatis.
         </p>
       </div>
     );
@@ -192,9 +215,6 @@ function StatusBody({
             Hapus dari pustaka
           </button>
         </div>
-        <p className="job-state-note">
-          <ShieldCheck size={12} /> Retensi audio berakhir sebelum job sempat diproses.
-        </p>
       </div>
     );
   }
@@ -212,7 +232,7 @@ function StatusBody({
             Hapus dari pustaka
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => onNavigate("home")}>
-            Unggah berkas baru
+            Transkripsi baru
           </button>
         </div>
       </div>
@@ -227,7 +247,7 @@ function StatusBody({
       <h3>Transkrip belum tersedia</h3>
       <p>Job ini belum punya segmen transkrip yang bisa ditampilkan.</p>
       <div className="job-state-actions">
-        <button className="btn btn-ghost btn-sm" onClick={() => onToast("Coba muat ulang halaman")}>
+        <button className="btn btn-ghost btn-sm" onClick={() => onToast("Menyegarkan data…")}>
           Muat ulang
         </button>
       </div>
@@ -298,6 +318,7 @@ export default function Transcript({
   segments,
   speakers,
   audioUrl,
+  saveStatus = "idle",
   onEditSegment,
   onReassign,
   onRenameSpeaker,
@@ -310,7 +331,8 @@ export default function Transcript({
   segments: UiSegment[];
   speakers: UiSpeaker[];
   audioUrl: string | null;
-  onEditSegment: (index: number, text: string) => void;
+  saveStatus?: SaveStatus;
+  onEditSegment: (index: number, text: string, silent?: boolean) => void;
   onReassign: (index: number, speaker: string) => void;
   onRenameSpeaker: (oldName: string, newName: string) => void;
   onExport: (format: ExportFormat) => void;
@@ -321,9 +343,17 @@ export default function Transcript({
   const [tab, setTab] = useState<"transcript" | "speakers" | "export">("transcript");
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState<number>(1);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
+  const [segSearch, setSegSearch] = useState("");
+  const [onlyLowConf, setOnlyLowConf] = useState(false);
+  const [speakerFilter, setSpeakerFilter] = useState("ALL");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const skipSave = useRef(false);
+  const lastAutosaved = useRef<string>("");
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const seconds = job.seconds || 0;
@@ -336,20 +366,54 @@ export default function Transcript({
     setCurrent(0);
     setPlaying(false);
     setEditingId(null);
+    setSegSearch("");
+    setOnlyLowConf(false);
+    setSpeakerFilter("ALL");
+    setConfirmDelete(false);
   }, [job.id]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.playbackRate = speed;
+  }, [speed, audioUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     const onTime = () => setCurrent(audio.currentTime);
     const onEnd = () => setPlaying(false);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("ended", onEnd);
+    audio.addEventListener("play", onPlay);
+    audio.addEventListener("pause", onPause);
     return () => {
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("ended", onEnd);
+      audio.removeEventListener("play", onPlay);
+      audio.removeEventListener("pause", onPause);
     };
   }, [audioUrl]);
+
+  // Debounced autosave ≤ 2 detik saat menyunting segmen (TK-044: wajib ≤ 5 detik)
+  useEffect(() => {
+    if (editingId === null) return;
+    const original = segments[editingId]?.text ?? "";
+    const trimmed = draft.trim();
+    if (trimmed === "" || trimmed === original || trimmed === lastAutosaved.current) {
+      return;
+    }
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(() => {
+      lastAutosaved.current = trimmed;
+      onEditSegment(editingId, trimmed, true);
+    }, AUTOSAVE_MS);
+    return () => {
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    };
+  }, [draft, editingId, onEditSegment, segments]);
 
   const activeIndex = useMemo(
     () =>
@@ -362,11 +426,12 @@ export default function Transcript({
 
   const seek = (value: number, autoPlay = true) => {
     if (!audioAvailable) {
-      onToast("Audio sudah dihapus otomatis. Transkrip tetap tersimpan 30 hari.");
+      onToast("Audio sudah dihapus sesuai retensi 24 jam. Transkrip tetap bisa disunting.");
       return;
     }
     const audio = audioRef.current;
-    const target = Math.max(0, Math.min(seconds, value));
+    const cap = seconds > 0 ? seconds : audio?.duration || 999999;
+    const target = Math.max(0, Math.min(cap, value));
     setCurrent(target);
     if (audio) {
       audio.currentTime = target;
@@ -389,27 +454,43 @@ export default function Transcript({
     }
   };
 
+  const cycleSpeed = () => {
+    const idx = SPEEDS.indexOf(speed as (typeof SPEEDS)[number]);
+    const next = SPEEDS[(idx + 1) % SPEEDS.length];
+    setSpeed(next);
+  };
+
   const seekFromEvent = (e: MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    seek(Math.round(ratio * seconds), false);
+    seek(Math.round(ratio * seconds * 10) / 10, false);
   };
 
   const startEdit = (index: number) => {
     skipSave.current = false;
+    lastAutosaved.current = segments[index].text;
     setEditingId(index);
     setDraft(segments[index].text);
   };
 
   const saveEdit = (index: number) => {
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+    }
     if (skipSave.current) {
       skipSave.current = false;
       setEditingId(null);
       return;
     }
     const nextText = draft.trim();
-    if (nextText !== "" && nextText !== segments[index].text) {
-      onEditSegment(index, nextText);
+    if (
+      nextText !== "" &&
+      nextText !== segments[index].text &&
+      nextText !== lastAutosaved.current
+    ) {
+      lastAutosaved.current = nextText;
+      onEditSegment(index, nextText, false);
     }
     setEditingId(null);
   };
@@ -436,8 +517,34 @@ export default function Transcript({
     return map;
   }, [speakers, segments]);
 
-  const pct = seconds > 0 ? (current / seconds) * 100 : 0;
-  const lowConfidence = segments.filter((s) => (s.confidence ?? 1) < 0.85).length;
+  const pct = seconds > 0 ? Math.min(100, (current / seconds) * 100) : 0;
+  const lowConfidenceCount = useMemo(
+    () => segments.filter((s) => (s.confidence ?? 1) < 0.85).length,
+    [segments],
+  );
+
+  const visibleSegments = useMemo(() => {
+    const q = segSearch.trim().toLowerCase();
+    return segments
+      .map((s, originalIndex) => ({ segment: s, originalIndex }))
+      .filter(({ segment }) => {
+        if (onlyLowConf && (segment.confidence ?? 1) >= 0.85) return false;
+        if (speakerFilter !== "ALL" && segment.speaker !== speakerFilter) return false;
+        if (q !== "" && !`${segment.text} ${segment.speaker}`.toLowerCase().includes(q)) {
+          return false;
+        }
+        return true;
+      });
+  }, [onlyLowConf, segSearch, segments, speakerFilter]);
+
+  const saveLabel = useMemo(() => {
+    if (!canRead) return status.note;
+    if (saveStatus === "saving") return "Menyimpan perubahan otomatis…";
+    if (saveStatus === "saved") return "Semua perubahan tersimpan otomatis";
+    if (saveStatus === "conflict") return "Konflik versi — transkrip telah dimuat ulang";
+    if (saveStatus === "error") return "Gagal menyimpan — periksa koneksi";
+    return "Simpan otomatis aktif (≤2 detik)";
+  }, [canRead, saveStatus, status.note]);
 
   return (
     <section className="panel transcript-panel">
@@ -452,7 +559,7 @@ export default function Transcript({
             aria-selected={tab === "transcript"}
           >
             <FileText size={15} /> Transkrip
-            {lowConfidence > 0 ? <span className="tab-count">{lowConfidence}</span> : null}
+            {lowConfidenceCount > 0 ? <span className="tab-count">{lowConfidenceCount}</span> : null}
           </button>
           <button
             className={`tab ${tab === "speakers" ? "is-active" : ""}`}
@@ -485,8 +592,36 @@ export default function Transcript({
           >
             <Download size={16} />
           </button>
+          <button
+            className="icon-btn"
+            onClick={() => setConfirmDelete((v) => !v)}
+            title="Hapus job ini"
+            aria-label="Hapus job ini"
+          >
+            <Trash2 size={16} />
+          </button>
         </div>
       </div>
+
+      {confirmDelete ? (
+        <div className="inline-delete-bar" role="alert">
+          <span>Hapus job “{job.title}” beserta audio dan transkripnya?</span>
+          <div className="inline-delete-actions">
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={() => {
+                setConfirmDelete(false);
+                onDeleteJob(job.id);
+              }}
+            >
+              <Trash2 size={13} /> Ya, hapus
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>
+              Batal
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="transcript-meta">
         <div className="meta-title-row">
@@ -522,12 +657,12 @@ export default function Transcript({
             ) : null}
           </div>
           <span className="meta-names">
-            {job.diarized
+            {job.diarized && speakers.length > 0
               ? speakers.map((s) => s.name).join(" · ")
               : "Pelabelan pembicara tidak aktif"}
           </span>
           <span className="retention-badge" title="Batas penyimpanan audio">
-            <ShieldCheck size={12} /> {audioAvailable ? `Audio ${job.audioExpires ?? "24 jam"}` : "Audio terhapus"}
+            <Lock size={11} /> {audioAvailable ? `Audio ${job.audioExpires ?? "≤24 jam"}` : "Audio sudah dihapus"}
           </span>
         </div>
       </div>
@@ -541,6 +676,24 @@ export default function Transcript({
             disabled={!audioAvailable}
           >
             {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
+          </button>
+          <button
+            className="player-step-btn"
+            onClick={() => seek(current - 5, false)}
+            disabled={!audioAvailable}
+            title="Mundur 5 detik"
+            aria-label="Mundur 5 detik"
+          >
+            <Rewind size={13} />
+          </button>
+          <button
+            className="player-step-btn"
+            onClick={() => seek(current + 5, false)}
+            disabled={!audioAvailable}
+            title="Maju 5 detik"
+            aria-label="Maju 5 detik"
+          >
+            <FastForward size={13} />
           </button>
           <span className="player-time">{formatClock(current)}</span>
           <div
@@ -561,17 +714,70 @@ export default function Transcript({
             <span className="player-knob" style={{ left: `${pct}%` }} />
           </div>
           <span className="player-time">{formatClock(seconds)}</span>
+          <button
+            type="button"
+            className="player-speed-btn"
+            onClick={cycleSpeed}
+            disabled={!audioAvailable}
+            title="Kecepatan putar"
+          >
+            {speed}×
+          </button>
           <span className="player-note">
             {audioAvailable ? (
-              <>
-                <ShieldCheck size={12} /> sisa {job.audioExpires ?? "24 jam"}
-              </>
+              <>sisa {job.audioExpires ?? "≤24 jam"}</>
             ) : (
               <>
                 <Lock size={12} /> audio dihapus otomatis
               </>
             )}
           </span>
+        </div>
+      ) : null}
+
+      {canRead && tab === "transcript" ? (
+        <div className="transcript-filter-bar">
+          <div className="seg-search-box">
+            <Search size={13} />
+            <input
+              type="text"
+              value={segSearch}
+              onChange={(e) => setSegSearch(e.target.value)}
+              placeholder="Cari kata di dalam transkrip…"
+              aria-label="Cari kata di dalam transkrip"
+            />
+            {segSearch ? (
+              <button type="button" onClick={() => setSegSearch("")} aria-label="Hapus pencarian">
+                <X size={12} />
+              </button>
+            ) : null}
+          </div>
+          {speakers.length > 1 ? (
+            <select
+              className="seg-speaker-filter"
+              value={speakerFilter}
+              onChange={(e) => setSpeakerFilter(e.target.value)}
+              aria-label="Filter pembicara"
+            >
+              <option value="ALL">Semua pembicara</option>
+              {speakers.map((sp) => (
+                <option key={sp.name} value={sp.name}>
+                  {sp.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {lowConfidenceCount > 0 ? (
+            <button
+              type="button"
+              className={`low-conf-filter-btn ${onlyLowConf ? "is-active" : ""}`}
+              onClick={() => setOnlyLowConf((v) => !v)}
+              title="Tampilkan hanya segmen berkeyakinan rendah (<85%)"
+            >
+              <Filter size={11} />
+              <span>Perlu cek ({lowConfidenceCount})</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -582,19 +788,22 @@ export default function Transcript({
 
         {canRead && tab === "transcript" ? (
           <div className="segments">
-            {segments.map((s, i) => {
+            {visibleSegments.map(({ segment: s, originalIndex: i }) => {
               const currentSeg = i === activeIndex && (playing || current > 0);
               const editing = editingId === i;
+              const isLowConf = (s.confidence ?? 1) < 0.85;
               return (
                 <article
                   key={`${s.start}-${i}`}
-                  className={`segment ${currentSeg ? "is-current" : ""} ${editing ? "is-editing" : ""}`}
+                  className={`segment ${currentSeg ? "is-current" : ""} ${
+                    editing ? "is-editing" : ""
+                  } ${isLowConf ? "is-low-conf" : ""}`}
                   style={{ "--delay": `${Math.min(i, 6) * 40}ms` } as CSSProperties}
                   onClick={(e) => {
                     if ((e.target as HTMLElement).closest("button, select, textarea, input, a, label")) return;
                     seek(s.start || 0);
                   }}
-                  title="Klik segmen untuk memutar dari sini"
+                  title="Klik segmen untuk memutar audio dari titik ini"
                 >
                   <button
                     className={`avatar avatar-sm tone-${speakerTone(speakers, s.speaker)}`}
@@ -606,38 +815,40 @@ export default function Transcript({
                   <div className="segment-main">
                     <div className="segment-head">
                       <b>{s.speaker}</b>
-                      <span className="segment-role">{s.role}</span>
+                      {s.role ? <span className="segment-role">{s.role}</span> : null}
                       <button className="segment-time" onClick={() => seek(s.start || 0)}>
                         {s.time}
                       </button>
                       {s.edited ? <span className="edit-badge">diedit</span> : null}
-                      {(s.confidence ?? 1) < 0.85 ? (
+                      {isLowConf ? (
                         <span
                           className="low-conf"
-                          title={`Model kurang yakin (${Math.round((s.confidence ?? 0) * 100)}%). Periksa bagian ini.`}
+                          title={`Model kurang yakin (${Math.round((s.confidence ?? 0) * 100)}%). Klik pensil untuk menyunting.`}
                         >
-                          <AlertTriangle size={10} /> keyakinan rendah
+                          <AlertTriangle size={10} /> perlu cek ({Math.round((s.confidence ?? 0) * 100)}%)
                         </span>
                       ) : null}
                       <div className="segment-tools">
-                        <select
-                          className="segment-speaker"
-                          value={s.speaker}
-                          onChange={(e) => onReassign(i, e.target.value)}
-                          aria-label={`Pindahkan segmen ${i + 1} ke pembicara lain`}
-                          title="Pindahkan segmen ke pembicara lain"
-                        >
-                          {speakers.map((sp) => (
-                            <option key={sp.name} value={sp.name}>
-                              {sp.name}
-                            </option>
-                          ))}
-                        </select>
+                        {speakers.length > 0 ? (
+                          <select
+                            className="segment-speaker"
+                            value={s.speaker}
+                            onChange={(e) => onReassign(i, e.target.value)}
+                            aria-label={`Pindahkan segmen ${i + 1} ke pembicara lain`}
+                            title="Pindahkan segmen ke pembicara lain"
+                          >
+                            {speakers.map((sp) => (
+                              <option key={sp.name} value={sp.name}>
+                                {sp.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
                         <button
                           className="seg-edit"
                           onClick={() => startEdit(i)}
                           aria-label={`Edit segmen ${i + 1}`}
-                          title="Edit teks"
+                          title="Sunting teks segmen"
                         >
                           <Pencil size={12} />
                         </button>
@@ -665,19 +876,36 @@ export default function Transcript({
                           rows={3}
                         />
                         <div className="segment-edit-foot">
-                          <span>Enter simpan · Esc batal</span>
+                          <span>Simpan otomatis ≤2 dtk · Enter selesai · Esc batal</span>
                           <button className="btn btn-primary btn-xs" onClick={() => saveEdit(i)}>
-                            <Check size={12} /> Simpan
+                            <Check size={12} /> Selesai
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <p>{s.text}</p>
+                      <p onDoubleClick={() => startEdit(i)}>{s.text}</p>
                     )}
                   </div>
                 </article>
               );
             })}
+
+            {visibleSegments.length === 0 ? (
+              <div className="empty-actions">
+                <p>Tidak ada segmen yang cocok dengan filter saat ini.</p>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setSegSearch("");
+                    setOnlyLowConf(false);
+                    setSpeakerFilter("ALL");
+                  }}
+                >
+                  Reset filter segmen
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -686,22 +914,23 @@ export default function Transcript({
             <div className="panel-inline-head">
               <div>
                 <h3>Label pembicara</h3>
-                <p>Berlaku untuk transkrip ini saja, tidak untuk rekaman lain.</p>
+                <p>Berlaku untuk transkrip ini saja, tidak lintas rekaman.</p>
               </div>
               <span className="pill-soft">
                 <Users size={11} /> maks 8
               </span>
             </div>
 
-            {!job.diarized ? (
+            {!job.diarized || speakers.length === 0 ? (
               <div className="inline-notice">
                 <UserRound size={16} />
                 <p>
-                  Pelabelan pembicara tidak diaktifkan untuk job ini. Aktifkan saat mengunggah
-                  berikutnya — biayanya 2× kuota.
+                  Pelabelan pembicara tidak aktif atau hanya satu pembicara terdeteksi pada job ini.
+                  Aktifkan sakelar <b>Pelabelan pembicara</b> saat merekam/mengunggah untuk memisahkan
+                  pembicara (2× kuota).
                 </p>
                 <button className="btn btn-ghost btn-sm" onClick={() => onNavigate("home")}>
-                  Unggah dengan label
+                  Buat job berlabel
                 </button>
               </div>
             ) : null}
@@ -720,8 +949,9 @@ export default function Transcript({
             <div className="speakers-help">
               <Sparkles size={13} />
               <span>
-                Untuk memindahkan satu segmen, buka tab Transkrip lalu ubah dropdown di kanan nama
-                pembicara.
+                Ketik nama baru di atas lalu tekan Enter untuk mengganti semua segmen berlabel
+                tersebut. Untuk memindahkan satu segmen saja, gunakan dropdown di kanan segmen pada
+                tab Transkrip.
               </span>
             </div>
           </div>
@@ -731,8 +961,8 @@ export default function Transcript({
           <div className="export-tab">
             <div className="panel-inline-head">
               <div>
-                <h3>Ekspor transkrip</h3>
-                <p>Ekspor tetap bisa dilakukan meskipun audio sudah dihapus.</p>
+                <h3>Ekspor & kelola transkrip</h3>
+                <p>Ekspor mencerminkan suntingan dan nama pembicara terbaru, walau audio sudah dihapus.</p>
               </div>
               <button className="btn btn-ghost btn-sm" onClick={copyAll}>
                 <Copy size={13} /> Salin semua
@@ -756,11 +986,21 @@ export default function Transcript({
               ))}
             </div>
 
+            <div className="danger-row">
+              <div>
+                <b>Hapus job ini sekarang</b>
+                <p>Audio dan seluruh segmen transkrip untuk job ini langsung dihapus permanen.</p>
+              </div>
+              <button className="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
+                <Trash2 size={13} /> Hapus job
+              </button>
+            </div>
+
             <div className="export-note">
-              <ShieldCheck size={13} />
+              <Lock size={13} />
               <span>
-                Transkrip tersimpan 30 hari. Setelah itu, ekspor apa pun tidak lagi tersedia kecuali
-                kamu menyimpannya sendiri.
+                Audio dihapus otomatis ≤ 24 jam setelah job selesai. Transkrip tersimpan 30 hari di
+                sesi peramban ini.
               </span>
             </div>
           </div>
@@ -769,8 +1009,12 @@ export default function Transcript({
 
       <div className="transcript-foot">
         <span>
-          <span className={`foot-dot ${canRead ? "" : "is-idle"}`} />
-          {canRead ? "Perubahan tersimpan otomatis" : status.note}
+          <span
+            className={`foot-dot ${
+              !canRead ? "is-idle" : saveStatus === "saving" ? "is-saving" : ""
+            }`}
+          />
+          {saveLabel}
         </span>
         <span className="foot-model">
           <Globe2 size={12} /> {job.model ?? "whisper-large-v3-turbo"}

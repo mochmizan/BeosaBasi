@@ -1,8 +1,10 @@
-"""Anonymous identity (no login): HttpOnly cookie + hashed IP for quota.
+"""Anonymous identity (no login): HttpOnly cookie + X-Session-Token fallback + hashed IP for quota.
 
 Design (documented in docs/ADR/0001-anonymous-identity.md):
-- A random 256-bit token in an HttpOnly cookie owns jobs. Losing the cookie
-  means losing access to those jobs; there is no account to recover.
+- A random 256-bit token in an HttpOnly cookie (or X-Session-Token header when
+  cross-origin quick tunnels / mobile ITP block third-party cookies) owns jobs.
+  Losing the cookie/token means losing access to those jobs; there is no account
+  to recover.
 - Daily quota is keyed by a salted hash of the client IP (PRD US-07), so
   clearing cookies does not reset the daily allowance.
 - The raw IP is never stored. Logs only contain the short hash.
@@ -20,6 +22,8 @@ from fastapi import Request, Response
 from api import dal
 from api.config import Settings
 from api.timeutil import iso, utcnow
+
+SESSION_HEADER = "X-Session-Token"
 
 
 @dataclass(frozen=True)
@@ -54,13 +58,17 @@ def resolve_identity(request: Request, response: Response, conn,
     """Return the caller's identity, creating an anonymous session if needed."""
     now = utcnow()
     ip_hash = hash_ip(client_ip(request, settings), settings.ip_hash_salt)
-    raw = request.cookies.get(settings.cookie_name)
+    raw = (
+        request.cookies.get(settings.cookie_name)
+        or request.headers.get("x-session-token", "").strip()
+    )
 
     if raw:
         token_hash = hash_token(raw)
         session = dal.anon_session_get(conn, token_hash)
         if session is not None:
             dal.anon_session_touch(conn, token_hash, iso(now), ip_hash)
+            response.headers[SESSION_HEADER] = raw
             return Identity(session["user_id"], ip_hash, is_new=False)
 
     token = secrets.token_urlsafe(32)
@@ -88,4 +96,5 @@ def resolve_identity(request: Request, response: Response, conn,
         samesite="lax",
         path="/",
     )
+    response.headers[SESSION_HEADER] = token
     return Identity(user_id, ip_hash, is_new=True)

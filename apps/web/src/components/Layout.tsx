@@ -1,38 +1,53 @@
-// Kerangka aplikasi: sidebar, topbar, latar bukit biru, toast, palette,
-// modal persetujuan — plus penyedia data bersama (polling API).
+// Kerangka aplikasi: sidebar, topbar, bilah navigasi seluler bawah, latar bukit biru,
+// toast, command palette — plus penyedia data bersama (polling API, unggah 3x paralel
+// dengan pelanjutan ListParts, dan mode rekam suara langsung).
+// Tanpa akun & tanpa modal kebijakan (sesuai ADR-0001).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Agentation } from "agentation";
-import { BarChart3, CheckCircle2, Copy, Download, FileUp, Library, Moon, ShieldCheck, Sparkles } from "lucide-react";
-import { api, ApiError } from "../api/client";
+import {
+  BarChart3,
+  CheckCircle2,
+  Copy,
+  Download,
+  FileUp,
+  Home,
+  Library,
+  Mic,
+  Moon,
+  Settings,
+  Sparkles,
+} from "lucide-react";
+import { api, ApiError, uploadFileMultipart } from "../api/client";
 import { PESAN_GALAT } from "../api/errors";
-import type { JobSummary, Me, ProcessingStage } from "../api-types";
+import type { JobSummary, Me, ProcessingStage, UploadSession } from "../api-types";
 import {
   uiJobCard,
   uiTranscript,
 } from "../lib/adapters";
-import { buildTXT, fileBase, downloadText, initialsOf } from "../lib/ui";
+import { buildTXT, fileBase, downloadText } from "../lib/ui";
 import { modKey } from "../lib/platform";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import CommandPalette from "./CommandPalette";
-import PrivacyConsent from "./PrivacyConsent";
 import {
-  CONSENT_VERSION,
   DAILY_MINUTES,
+  DEFAULT_PREFS,
   IDLE_UPLOAD,
   MAX_ACTIVE,
   StudioContext,
-  type PendingUpload,
+  type InputMode,
   type Studio,
+  type StudioPrefs,
   type UiJobLite,
   type UploadFileMeta,
 } from "./studio";
 
-const JOBS_POLL_MS = 8000;
-const HEALTH_POLL_MS = 30000;
+const JOBS_POLL_MS = 5000;
+const HEALTH_POLL_MS = 20000;
 const JOB_POLL_MS = 3000;
+const PREFS_KEY = "beosabasi_prefs";
 
 const STAGE_PROGRESS: Record<ProcessingStage, number> = {
   probing: 14,
@@ -41,24 +56,22 @@ const STAGE_PROGRESS: Record<ProcessingStage, number> = {
   merging: 94,
 };
 
-function prettyName(email: string): string {
-  const local = email.split("@")[0] ?? "pengguna";
-  return local
-    .split(/[._-]+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+function loadPrefs(): StudioPrefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    const parsed = JSON.parse(raw) as Partial<StudioPrefs>;
+    return { ...DEFAULT_PREFS, ...parsed };
+  } catch {
+    return DEFAULT_PREFS;
+  }
 }
 
-function formatWib(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+interface ResumableContext {
+  file: File;
+  meta: UploadFileMeta;
+  session: UploadSession | null;
+  etags: Map<number, string>;
 }
 
 export default function Layout(): React.JSX.Element {
@@ -69,6 +82,8 @@ export default function Layout(): React.JSX.Element {
     const saved = localStorage.getItem("ow-theme");
     return saved === "light" ? "light" : "dark";
   });
+  const [prefs, setPrefs] = useState<StudioPrefs>(loadPrefs);
+  const [inputMode, setInputMode] = useState<InputMode>("upload");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -79,22 +94,27 @@ export default function Layout(): React.JSX.Element {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState("");
   const [toastOpen, setToastOpen] = useState(false);
-  const [consentOpen, setConsentOpen] = useState(false);
-  const [consentReadOnly, setConsentReadOnly] = useState(true);
-  const [pending, setPending] = useState<PendingUpload | null>(null);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const uploadAbort = useRef(false);
-  const consentRef = useRef(false);
-
-  useEffect(() => {
-    consentRef.current = (me?.consent ?? null) !== null;
-  }, [me]);
+  const abortRef = useRef<AbortController | null>(null);
+  const resumeRef = useRef<ResumableContext | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("ow-theme", theme);
   }, [theme]);
+
+  const updatePrefs = useCallback((patch: Partial<StudioPrefs>) => {
+    setPrefs((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+      } catch {
+        // Abaikan bila localStorage penuh
+      }
+      return next;
+    });
+  }, []);
 
   const toast = useCallback((message: string) => {
     setToastMsg(message);
@@ -106,7 +126,13 @@ export default function Layout(): React.JSX.Element {
   const refreshHealth = useCallback(() => {
     api
       .getHealth()
-      .then((h) => setWorkerOnline(h.status === "ok"))
+      .then((h) => {
+        if (typeof h.worker_active === "boolean") {
+          setWorkerOnline(h.status === "ok" && h.worker_active);
+        } else {
+          setWorkerOnline(h.status === "ok");
+        }
+      })
       .catch(() => setWorkerOnline(false));
   }, []);
 
@@ -140,97 +166,135 @@ export default function Layout(): React.JSX.Element {
     };
   }, [refreshData, refreshHealth, refreshJobs]);
 
-  // ---- unggahan: kontrak multipart nyata -------------------------------
+  // ---- unggahan: kontrak multipart 8 MiB × 3 paralel + ListParts resume ----
 
-  const startUpload = useCallback(
-    (file: File, meta: UploadFileMeta) => {
-      if (me !== null && !consentRef.current) {
-        setPending({ file, meta });
-        setConsentReadOnly(false);
-        setConsentOpen(true);
-        return;
-      }
+  const runUpload = useCallback(
+    (file: File, meta: UploadFileMeta, existingSession: UploadSession | null, knownEtags: Map<number, string>) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      resumeRef.current = {
+        file,
+        meta,
+        session: existingSession,
+        etags: new Map(knownEtags),
+      };
+
+      setUpload({
+        phase: "uploading",
+        progress: existingSession ? Math.round((knownEtags.size / Math.max(1, existingSession.part_count)) * 95) : 0,
+        partsDone: knownEtags.size,
+        partsTotal: existingSession?.part_count ?? Math.max(1, Math.ceil(file.size / (8 * 1024 * 1024))),
+        fileMeta: meta,
+        stage: null,
+        jobId: existingSession?.job_id ?? null,
+        queuePosition: null,
+        eta: null,
+        canResume: false,
+        error: null,
+      });
+
       void (async () => {
-        uploadAbort.current = false;
-        setUpload({
-          phase: "uploading",
-          progress: 0,
-          fileMeta: meta,
-          stage: null,
-          jobId: null,
-          error: null,
-        });
-        const contentType = file.type || "application/octet-stream";
         try {
-          const session = await api.initUpload({
-            filename: file.name,
-            size_bytes: file.size,
-            content_type: contentType,
+          const job = await uploadFileMultipart({
+            file,
             language: meta.language,
             diarization: meta.diarized,
-            min_speakers: meta.diarized ? meta.speakers : undefined,
-            max_speakers: meta.diarized ? meta.speakers : undefined,
-            turnstile_token: "stub",
+            speakers: meta.diarized ? meta.speakers : undefined,
+            concurrency: 3,
+            existingSession,
+            knownEtags,
+            signal: controller.signal,
+            onSession: (session, etags) => {
+              if (resumeRef.current) {
+                resumeRef.current.session = session;
+                resumeRef.current.etags = new Map(etags);
+              }
+            },
+            onProgress: (percent, done, total) => {
+              setUpload((prev) =>
+                prev.phase === "uploading"
+                  ? { ...prev, progress: percent, partsDone: done, partsTotal: total }
+                  : prev,
+              );
+            },
           });
-          const parts: { part_number: number; etag: string }[] = [];
-          for (let i = 0; i < session.part_count; i += 1) {
-            if (uploadAbort.current) {
-              setUpload(IDLE_UPLOAD);
-              return;
-            }
-            const sign = await api.signPart(session.upload_id, { part_number: i });
-            const blob = file.slice(
-              i * session.part_size,
-              Math.min(file.size, (i + 1) * session.part_size),
-            );
-            const etag = await new Promise<string>((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.open("PUT", sign.url);
-              xhr.upload.onprogress = (e) => {
-                if (!e.lengthComputable) return;
-                const overall = ((i + e.loaded / e.total) / session.part_count) * 95;
-                setUpload((prev) => (prev.phase === "uploading" ? { ...prev, progress: overall } : prev));
-              };
-              xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) {
-                  resolve(xhr.getResponseHeader("ETag") ?? xhr.getResponseHeader("etag") ?? "");
-                } else {
-                  reject(new ApiError(xhr.status, PESAN_GALAT.INTERNAL));
-                }
-              };
-              xhr.onerror = () => reject(new ApiError(0, PESAN_GALAT.INTERNAL));
-              xhr.send(blob);
-            });
-            parts.push({ part_number: i, etag });
-          }
-          if (uploadAbort.current) {
-            setUpload(IDLE_UPLOAD);
-            return;
-          }
-          const job = await api.completeUpload(session.upload_id, { parts });
-          setUpload((prev) => ({ ...prev, phase: "queued", progress: 100, jobId: job.job_id }));
+
+          resumeRef.current = null;
+          setUpload((prev) => ({
+            ...prev,
+            phase: "queued",
+            progress: 100,
+            jobId: job.job_id,
+            canResume: false,
+            error: null,
+          }));
+          setActiveId(job.job_id);
           refreshJobs();
           refreshMe();
-          toast("Berkas masuk antrean transkripsi");
+          toast(
+            meta.source === "record"
+              ? "Rekaman suara berhasil diunggah ke antrean"
+              : "Berkas masuk antrean transkripsi",
+          );
         } catch (error) {
+          if (controller.signal.aborted) {
+            return;
+          }
           const message =
             error instanceof ApiError ? error.message : PESAN_GALAT.INTERNAL;
-          setUpload({ ...IDLE_UPLOAD, phase: "failed", error: message, fileMeta: meta });
+          const resumable = Boolean(resumeRef.current?.session);
+          setUpload((prev) => ({
+            ...prev,
+            phase: "failed",
+            canResume: resumable,
+            error: message,
+            fileMeta: meta,
+          }));
           toast(`Unggahan gagal — ${message}`);
         }
       })();
     },
-    [me, refreshJobs, refreshMe, toast],
+    [refreshJobs, refreshMe, toast],
   );
+
+  const startUpload = useCallback(
+    (file: File, meta: UploadFileMeta) => {
+      runUpload(file, meta, null, new Map());
+    },
+    [runUpload],
+  );
+
+  const resumeUpload = useCallback(() => {
+    const ctx = resumeRef.current;
+    if (!ctx) return;
+    toast("Melanjutkan unggahan dari potongan terakhir…");
+    runUpload(ctx.file, ctx.meta, ctx.session, ctx.etags);
+  }, [runUpload, toast]);
 
   const cancelUpload = useCallback(
     (force = false) => {
-      uploadAbort.current = true;
-      if (!force && upload.phase === "queued") toast("Job antre tetap diproses; unggahan baru menunggu");
-      else toast(force ? "Siap untuk unggahan baru" : "Unggahan dibatalkan");
+      abortRef.current?.abort();
+      const currentJobId = upload.jobId;
+      resumeRef.current = null;
+      if (!force && (upload.phase === "queued" || upload.phase === "processing") && currentJobId) {
+        void api
+          .deleteJob(currentJobId)
+          .then(() => {
+            refreshJobs();
+            refreshMe();
+            toast("Job dibatalkan dan dihapus dari antrean");
+          })
+          .catch(() => {
+            toast("Gagal membatalkan job di server");
+          });
+      } else {
+        toast(force ? "Siap untuk rekaman atau unggahan baru" : "Unggahan dibatalkan");
+      }
       setUpload(IDLE_UPLOAD);
     },
-    [toast, upload.phase],
+    [refreshJobs, refreshMe, toast, upload.jobId, upload.phase],
   );
 
   // pantau job yang sedang diunggah sampai selesai
@@ -243,8 +307,20 @@ export default function Layout(): React.JSX.Element {
         try {
           const detail = await api.getJob(upload.jobId as string);
           if (!aktif) return;
+          setWorkerOnline(detail.worker_active);
           const state = detail.job.state;
-          if (state === "processing") {
+          const etaStr =
+            detail.eta_seconds !== null && detail.eta_seconds !== undefined
+              ? `±${Math.max(1, Math.round(detail.eta_seconds / 60))} menit`
+              : "±2 menit";
+          if (state === "queued") {
+            setUpload((prev) => ({
+              ...prev,
+              phase: "queued",
+              queuePosition: detail.queue_position ?? 1,
+              eta: etaStr,
+            }));
+          } else if (state === "processing") {
             const stage = detail.job.stage ?? "transcribing";
             setUpload((prev) => ({
               ...prev,
@@ -254,6 +330,7 @@ export default function Layout(): React.JSX.Element {
             }));
           } else if (state === "completed") {
             setUpload((prev) => ({ ...prev, phase: "completed", progress: 100, stage: null }));
+            setActiveId(detail.job.job_id);
             clearInterval(tick);
           } else if (state === "failed" || state === "expired") {
             const code = detail.job.error_code;
@@ -261,6 +338,7 @@ export default function Layout(): React.JSX.Element {
               ...prev,
               phase: "failed",
               stage: null,
+              canResume: false,
               error: code ? PESAN_GALAT[code] : PESAN_GALAT.INTERNAL,
             }));
             clearInterval(tick);
@@ -276,51 +354,6 @@ export default function Layout(): React.JSX.Element {
       clearInterval(tick);
     };
   }, [refreshJobs, upload.jobId, upload.phase]);
-
-  // ---- persetujuan ------------------------------------------------------
-
-  const consentGiven = (me?.consent ?? null) !== null;
-
-  const openNotice = useCallback((options?: { pending?: PendingUpload | null }) => {
-    setPending(options?.pending ?? null);
-    setConsentReadOnly(options?.pending === undefined || options?.pending === null);
-    setConsentOpen(true);
-  }, []);
-
-  const openGrant = useCallback(() => {
-    setPending(null);
-    setConsentReadOnly(false);
-    setConsentOpen(true);
-  }, []);
-
-  const onAgreeConsent = useCallback(() => {
-    void (async () => {
-      try {
-        await api.giveConsent({ document_version: CONSENT_VERSION, age_confirmed: true });
-        consentRef.current = true;
-        refreshMe();
-        setConsentOpen(false);
-        const queued = pending;
-        setPending(null);
-        if (queued) startUpload(queued.file, queued.meta);
-        else toast("Persetujuan privasi dicatat");
-      } catch (error) {
-        toast(error instanceof ApiError ? error.message : PESAN_GALAT.INTERNAL);
-      }
-    })();
-  }, [pending, refreshMe, startUpload, toast]);
-
-  const onWithdrawConsent = useCallback(() => {
-    void (async () => {
-      try {
-        await api.withdrawConsent();
-        refreshMe();
-        toast("Persetujuan ditarik — unggahan berikutnya akan meminta persetujuan ulang");
-      } catch (error) {
-        toast(error instanceof ApiError ? error.message : PESAN_GALAT.INTERNAL);
-      }
-    })();
-  }, [refreshMe, toast]);
 
   // ---- navigasi & pencarian ---------------------------------------------
 
@@ -379,9 +412,19 @@ export default function Layout(): React.JSX.Element {
     [navigate, toast],
   );
 
-  const startNew = useCallback(() => {
+  const startNewUpload = useCallback(() => {
+    setInputMode("upload");
     navigateView("home");
-    toast("Pilih berkas audio untuk diunggah");
+    toast("Pilih berkas audio/video untuk ditranskripsi");
+    setTimeout(() => {
+      document.querySelector(".upload-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  }, [navigateView, toast]);
+
+  const startNewRecording = useCallback(() => {
+    setInputMode("record");
+    navigateView("home");
+    toast("Mode rekam suara siap — klik mikrofon untuk mulai");
     setTimeout(() => {
       document.querySelector(".upload-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 80);
@@ -398,7 +441,12 @@ export default function Layout(): React.JSX.Element {
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "u") {
         e.preventDefault();
-        startNew();
+        startNewUpload();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        startNewRecording();
         return;
       }
       if (e.key === "Escape" && !typing) {
@@ -409,7 +457,7 @@ export default function Layout(): React.JSX.Element {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startNew]);
+  }, [startNewRecording, startNewUpload]);
 
   // ---- turunan untuk UI --------------------------------------------------
 
@@ -421,34 +469,15 @@ export default function Layout(): React.JSX.Element {
     return "home";
   }, [location.pathname]);
 
-  const profile = useMemo(() => {
-    const email = me?.email ?? "pilot@beosabasi.id";
-    return {
-      name: prettyName(email),
-      email,
-      initials: initialsOf(email),
-      pilot: "Pilot undangan",
-    };
-  }, [me]);
-
   const quota = useMemo(() => {
     const remaining = me?.quota_minutes_remaining ?? DAILY_MINUTES;
     const active = me?.active_jobs ?? 0;
     return {
       minutes: DAILY_MINUTES,
-      used: Math.max(0, DAILY_MINUTES - remaining),
+      used: Math.max(0, Math.round((DAILY_MINUTES - remaining) * 10) / 10),
       maxActive: MAX_ACTIVE,
       active,
       reset: "00.00 WIB",
-    };
-  }, [me]);
-
-  const consent = useMemo(() => {
-    const c = me?.consent;
-    if (!c) return null;
-    return {
-      version: `v${c.document_version}`,
-      given: formatWib(c.given_at),
     };
   }, [me]);
 
@@ -473,7 +502,7 @@ export default function Layout(): React.JSX.Element {
           const raw = jobs.find((j) => j.job_id === featured.id);
           if (!raw) return;
           const job = uiJobCard(raw);
-          const text = buildTXT(job, uiTranscript(res).segments);
+          const text = buildTXT(job, uiTranscript(res).segments, prefs.includeSpeakerLabels);
           if (download) {
             downloadText(`${fileBase(job)}.txt`, text);
             toast("Transkrip TXT diunduh");
@@ -489,11 +518,18 @@ export default function Layout(): React.JSX.Element {
 
     return [
       {
-        label: "Unggah berkas audio",
+        label: "Rekam suara langsung",
+        desc: "Rekam mikrofon dari browser tanpa perlu berkas",
+        hint: `${modKey}⇧R`,
+        icon: Mic,
+        run: startNewRecording,
+      },
+      {
+        label: "Unggah berkas audio/video",
         desc: "MP3, M4A, WAV, FLAC, OGG, OPUS, MP4, WEBM · maks 200 MB",
         hint: `${modKey}U`,
         icon: FileUp,
-        run: startNew,
+        run: startNewUpload,
       },
       {
         label: "Buka pustaka",
@@ -503,8 +539,8 @@ export default function Layout(): React.JSX.Element {
         run: () => navigateView("library"),
       },
       {
-        label: "Buka pemakaian",
-        desc: "Kuota harian, status job, dan retensi",
+        label: "Buka pemakaian & kuota",
+        desc: "Kuota harian 60 menit, status job, dan retensi",
         hint: "G W",
         icon: BarChart3,
         run: () => navigateView("insights"),
@@ -514,12 +550,6 @@ export default function Layout(): React.JSX.Element {
         desc: "Sesuaikan tampilan ruang kerja",
         icon: theme === "dark" ? Moon : Sparkles,
         run: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
-      },
-      {
-        label: "Buka pemberitahuan privasi",
-        desc: `Versi v${CONSENT_VERSION} · retensi audio 24 jam`,
-        icon: ShieldCheck,
-        run: () => openNotice(),
       },
       {
         label: "Salin transkrip aktif",
@@ -534,7 +564,7 @@ export default function Layout(): React.JSX.Element {
         run: () => copyTranscript(true),
       },
     ];
-  }, [featured, jobs, navigateView, openNotice, startNew, theme, toast]);
+  }, [featured, jobs, navigateView, prefs.includeSpeakerLabels, startNewRecording, startNewUpload, theme, toast]);
 
   const ctx: Studio = {
     theme,
@@ -542,17 +572,21 @@ export default function Layout(): React.JSX.Element {
     view,
     navigate: navigateView,
     goJob,
+    inputMode,
+    setInputMode,
+    startNewUpload,
+    startNewRecording,
     me,
-    profile,
     quota,
-    consent,
-    consentGiven,
+    prefs,
+    updatePrefs,
     jobs,
     refreshData,
     workerOnline,
     refreshHealth,
     upload,
     startUpload,
+    resumeUpload,
     cancelUpload,
     query,
     setQuery,
@@ -560,10 +594,6 @@ export default function Layout(): React.JSX.Element {
     activeId,
     selectJob,
     toast,
-    openNotice,
-    openGrant,
-    onAgreeConsent,
-    onWithdrawConsent,
   };
 
   return (
@@ -572,7 +602,8 @@ export default function Layout(): React.JSX.Element {
         <Sidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
-          onNew={startNew}
+          onNewUpload={startNewUpload}
+          onNewRecord={startNewRecording}
         />
 
         <div className="main">
@@ -740,27 +771,59 @@ export default function Layout(): React.JSX.Element {
             workerOnline={workerOnline}
             onPalette={() => setPaletteOpen(true)}
             onMenu={() => setSidebarOpen(true)}
+            onQuickRecord={startNewRecording}
           />
 
           <main className="content">
             <Outlet context={ctx} />
           </main>
+
+          <nav className="mobile-bottom-nav" aria-label="Navigasi seluler">
+            <button
+              className={`mob-nav-item ${view === "home" && inputMode === "upload" ? "is-active" : ""}`}
+              onClick={() => {
+                setInputMode("upload");
+                navigateView("home");
+              }}
+            >
+              <Home size={18} />
+              <span>Studio</span>
+            </button>
+            <button
+              className={`mob-nav-item is-record ${view === "home" && inputMode === "record" ? "is-active" : ""}`}
+              onClick={startNewRecording}
+            >
+              <span className="mob-rec-orb">
+                <Mic size={17} />
+              </span>
+              <span>Rekam</span>
+            </button>
+            <button
+              className={`mob-nav-item ${view === "library" ? "is-active" : ""}`}
+              onClick={() => navigateView("library")}
+            >
+              <Library size={18} />
+              <span>Pustaka</span>
+              {jobs.length > 0 ? <i className="mob-nav-badge">{jobs.length}</i> : null}
+            </button>
+            <button
+              className={`mob-nav-item ${view === "insights" ? "is-active" : ""}`}
+              onClick={() => navigateView("insights")}
+            >
+              <BarChart3 size={18} />
+              <span>Kuota</span>
+            </button>
+            <button
+              className={`mob-nav-item ${view === "settings" ? "is-active" : ""}`}
+              onClick={() => navigateView("settings")}
+            >
+              <Settings size={18} />
+              <span>Setelan</span>
+            </button>
+          </nav>
         </div>
 
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={paletteActions} />
-
-        <PrivacyConsent
-          open={consentOpen}
-          pending={pending?.meta ?? null}
-          readOnly={consentReadOnly}
-          consent={consent}
-          onAgree={onAgreeConsent}
-          onClose={() => {
-            setConsentOpen(false);
-            if (pending) toast("Unggahan dibatalkan sebelum dimulai");
-            setPending(null);
-          }}
-        />
 
         <div className={`toast ${toastOpen ? "is-visible" : ""}`} role="status" aria-live="polite">
           <span className="toast-icon">

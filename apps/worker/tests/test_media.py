@@ -85,3 +85,26 @@ def test_probe_rejects_too_long(monkeypatch, tmp_path):
     with pytest.raises(MediaError) as exc:
         probe(str(src))
     assert exc.value.code == "TOO_LONG"
+
+
+
+@needs_ffmpeg
+def test_normalize_webm_with_missing_format_duration(monkeypatch, tmp_path):
+    src = tmp_path / "ok.wav"
+    _wav(src, seconds=2)
+    dest = tmp_path / "norm.wav"
+    orig_parse = media._parse_duration
+    monkeypatch.setattr(media, "_parse_duration", lambda _info: None)
+    monkeypatch.setattr(
+        media,
+        "probe",
+        lambda path, allow_unknown_duration=False: {
+            "duration": 0.0,
+            "has_audio": True,
+            "format": "webm",
+        }
+        if allow_unknown_duration
+        else orig_parse({}),
+    )
+    info = normalize(str(src), str(dest))
+    assert info["duration"] == pytest.approx(2.0, abs=0.05)

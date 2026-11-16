@@ -30,7 +30,10 @@ class WorkerClient:
         self.config = config
         self._client = client or httpx.Client(
             base_url=config.api_url, timeout=60.0,
-            headers={"Authorization": f"Bearer {config.token}"})
+            headers={
+                "Authorization": f"Bearer {config.token}",
+                "X-Worker-Id": config.worker_id,
+            })
 
     def close(self) -> None:
         self._client.close()

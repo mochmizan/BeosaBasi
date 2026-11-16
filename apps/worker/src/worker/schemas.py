@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class Health(BaseModel):
     status: str
+    worker_active: bool = Field(default=None, description="True bila ada pekerja yang berdetak dalam 90 detik terakhir")
 
 
 class Accepted(BaseModel):

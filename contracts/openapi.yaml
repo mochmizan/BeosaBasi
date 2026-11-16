@@ -557,6 +557,9 @@ components:
         status:
           type: string
           example: ok
+        worker_active:
+          type: boolean
+          description: True bila ada pekerja yang berdetak dalam 90 detik terakhir
     Error:
       type: object
       required: [code, message]

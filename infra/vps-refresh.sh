@@ -1,5 +1,5 @@
 #!/bin/bash
-# BeosaBasi VPS refresh: (re)start tunnels, update S3_ENDPOINT, restart API.
+# BeosaBasi VPS refresh: (re)start tunnels, update S3_ENDPOINT & CORS, restart API.
 # Run as beosabasi. Safe to run anytime; also runs at boot via cron @reboot.
 # Prints the three public URLs at the end.
 set -euo pipefail
@@ -25,16 +25,27 @@ start_tunnel() { # $1=name $2=local-port $3=logfile
 S3_URL=$(start_tunnel s3 3900 s3-tunnel.log)
 echo "S3_URL=$S3_URL" | tee -a "$LOG"
 
+WEB_URL=$(start_tunnel web 18081 web-tunnel.log)
+echo "$WEB_URL" > web-url.txt
+echo "WEB_URL=$WEB_URL" | tee -a "$LOG"
+
 if grep -q '^S3_ENDPOINT=' .env; then
   sed -i "s|^S3_ENDPOINT=.*|S3_ENDPOINT=$S3_URL|" .env
 else
   echo "S3_ENDPOINT=$S3_URL" >> .env
 fi
 
+CORS_VAL="${WEB_URL},http://localhost:5173,http://127.0.0.1:5173"
+if grep -q '^BEOSABASI_CORS_ORIGINS=' .env; then
+  sed -i "s|^BEOSABASI_CORS_ORIGINS=.*|BEOSABASI_CORS_ORIGINS=$CORS_VAL|" .env
+else
+  echo "BEOSABASI_CORS_ORIGINS=$CORS_VAL" >> .env
+fi
+
 # Containers survive reboot via restart:unless-stopped; just ensure they're up
-# and recreate api so the new S3_ENDPOINT takes effect.
+# and recreate api so the new S3_ENDPOINT and BEOSABASI_CORS_ORIGINS take effect.
 export COMPOSE_PROJECT_NAME=beosabasivps
-docker compose -f vps/compose.yaml up -d
+docker compose -f vps/compose.yaml up -d --force-recreate api
 
 for _ in $(seq 1 24); do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/healthz \
@@ -49,7 +60,4 @@ API_URL=$(start_tunnel api 18082 api-tunnel.log)
 echo "$API_URL" > api-url.txt
 echo "API_URL=$API_URL" | tee -a "$LOG"
 
-WEB_URL=$(start_tunnel web 18081 web-tunnel.log)
-echo "$WEB_URL" > web-url.txt
-echo "WEB_URL=$WEB_URL" | tee -a "$LOG"
 echo REFRESH-OK

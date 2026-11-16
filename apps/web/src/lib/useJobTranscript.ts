@@ -5,20 +5,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { JobDetail, Transcript } from "../api-types";
 import { api, ApiError } from "../api/client";
 import { pesanGalat } from "../api/errors";
-import { uiJobCard } from "./adapters";
-import { downloadBlob, fileBase } from "./ui";
+import { uiJobCard, uiTranscript } from "./adapters";
+import { buildSRT, buildTXT, buildVTT, downloadBlob, downloadText, fileBase } from "./ui";
 import { useStudio } from "../components/studio";
 import type { ExportFormat } from "../components/Transcript";
 
 const POLL_MS = 4000;
 
+export type SaveStatus = "idle" | "saving" | "saved" | "conflict" | "error";
+
 export function useJobTranscript(jobId: string | null) {
-  const { toast, refreshData } = useStudio();
+  const { toast, refreshData, prefs } = useStudio();
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const activeId = useRef<string | null>(null);
 
   const load = useCallback(async () => {
@@ -61,6 +64,7 @@ export function useJobTranscript(jobId: string | null) {
     setTranscript(null);
     setAudioUrl(null);
     setError(null);
+    setSaveStatus("idle");
     void load();
   }, [jobId, load]);
 
@@ -74,10 +78,11 @@ export function useJobTranscript(jobId: string | null) {
   }, [detail, load]);
 
   const editSegment = useCallback(
-    (index: number, text: string) => {
+    (index: number, text: string, silent = false) => {
       if (jobId === null || transcript === null) return;
       const raw = transcript.segments[index];
-      if (!raw) return;
+      if (!raw || raw.text === text) return;
+      setSaveStatus("saving");
       setTranscript((prev) =>
         prev === null
           ? prev
@@ -102,9 +107,16 @@ export function useJobTranscript(jobId: string | null) {
                   segments: prev.segments.map((s, i) => (i === index ? updated : s)),
                 },
           );
-          toast("Perubahan transkrip disimpan");
+          setSaveStatus("saved");
+          if (!silent) toast("Perubahan transkrip disimpan");
         } catch (e) {
-          toast(pesanGalat(e));
+          if (e instanceof ApiError && e.status === 409) {
+            setSaveStatus("conflict");
+            toast("Segmen telah diubah di tab lain. Memuat versi terbaru…");
+          } else {
+            setSaveStatus("error");
+            toast(pesanGalat(e));
+          }
           void load();
         }
       })();
@@ -120,6 +132,7 @@ export function useJobTranscript(jobId: string | null) {
         (s) => (s.display_name || s.label) === speakerName,
       );
       if (!raw || !speaker) return;
+      setSaveStatus("saving");
       setTranscript((prev) =>
         prev === null
           ? prev
@@ -144,8 +157,10 @@ export function useJobTranscript(jobId: string | null) {
                   segments: prev.segments.map((s, i) => (i === index ? updated : s)),
                 },
           );
+          setSaveStatus("saved");
           toast(`Segmen dipindahkan ke ${speakerName}`);
         } catch (e) {
+          setSaveStatus("error");
           toast(pesanGalat(e));
           void load();
         }
@@ -161,6 +176,7 @@ export function useJobTranscript(jobId: string | null) {
         (s) => (s.display_name || s.label) === oldName,
       );
       if (!speaker) return;
+      setSaveStatus("saving");
       setTranscript((prev) =>
         prev === null
           ? prev
@@ -186,8 +202,10 @@ export function useJobTranscript(jobId: string | null) {
                   ),
                 },
           );
+          setSaveStatus("saved");
           toast(`Label “${oldName}” diubah menjadi “${newName}”`);
         } catch (e) {
+          setSaveStatus("error");
           toast(pesanGalat(e));
           void load();
         }
@@ -199,18 +217,48 @@ export function useJobTranscript(jobId: string | null) {
   const exportAs = useCallback(
     (format: ExportFormat) => {
       if (jobId === null || detail === null) return;
+      const base = fileBase(uiJobCard(detail.job));
+
+      // Bila pengguna menonaktifkan label pembicara di pengaturan untuk TXT/SRT/VTT,
+      // kita dapat mengekspor langsung dari segmen terbaru atau melalui endpoint server.
+      if (!prefs.includeSpeakerLabels && transcript !== null && format !== "docx") {
+        const parsed = uiTranscript(transcript);
+        const stripped = parsed.segments.map((s) => ({ ...s, speaker: "", role: "" }));
+        if (format === "txt") {
+          downloadText(`${base}.txt`, buildTXT(uiJobCard(detail.job), stripped, false));
+        } else if (format === "srt") {
+          downloadText(`${base}.srt`, buildSRT(stripped, false));
+        } else {
+          downloadText(`${base}.vtt`, buildVTT(stripped, false));
+        }
+        toast(`Transkrip ${format.toUpperCase()} (tanpa label pembicara) diunduh`);
+        return;
+      }
+
       void (async () => {
         try {
           const blob = await api.exportTranscript(jobId, format);
-          const base = fileBase(uiJobCard(detail.job));
           downloadBlob(`${base}.${format}`, blob);
           toast(`Transkrip ${format.toUpperCase()} diunduh`);
         } catch (e) {
+          // Fallback ke penyusun lokal untuk TXT/SRT/VTT bila server mock tidak mengirim binary
+          if (transcript !== null && format !== "docx") {
+            const parsed = uiTranscript(transcript);
+            if (format === "txt") {
+              downloadText(`${base}.txt`, buildTXT(uiJobCard(detail.job), parsed.segments));
+            } else if (format === "srt") {
+              downloadText(`${base}.srt`, buildSRT(parsed.segments));
+            } else {
+              downloadText(`${base}.vtt`, buildVTT(parsed.segments));
+            }
+            toast(`Transkrip ${format.toUpperCase()} diunduh`);
+            return;
+          }
           toast(e instanceof ApiError ? e.message : pesanGalat(e));
         }
       })();
     },
-    [detail, jobId, toast],
+    [detail, jobId, prefs.includeSpeakerLabels, toast, transcript],
   );
 
   const deleteJob = useCallback(() => {
@@ -232,6 +280,7 @@ export function useJobTranscript(jobId: string | null) {
     audioUrl,
     error,
     loading,
+    saveStatus,
     reload: load,
     editSegment,
     reassign,

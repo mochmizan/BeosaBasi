@@ -1,4 +1,5 @@
-// Konteks bersama seluruh aplikasi (tema, kuota, job, unggahan, consent).
+// Konteks bersama seluruh aplikasi (tema, kuota, job, unggahan, rekaman suara, preferensi).
+// Tanpa akun & tanpa modal kebijakan (sesuai ADR-0001).
 // Penyedia hidup di Layout.tsx; halaman memakai useStudio().
 
 import { createContext, useContext } from "react";
@@ -7,9 +8,11 @@ import type { JobSummary, Me } from "../api-types";
 export interface UploadFileMeta {
   name: string;
   sizeMb: number;
+  durationSec?: number;
   diarized: boolean;
   speakers: number;
   language: "id" | "en" | "auto";
+  source?: "upload" | "record";
 }
 
 export type UploadPhase =
@@ -23,15 +26,15 @@ export type UploadPhase =
 export interface UploadState {
   phase: UploadPhase;
   progress: number;
+  partsDone?: number;
+  partsTotal?: number;
   fileMeta: UploadFileMeta | null;
   stage: string | null;
   jobId: string | null;
+  queuePosition?: number | null;
+  eta?: string | null;
+  canResume?: boolean;
   error: string | null;
-}
-
-export interface PendingUpload {
-  file: File;
-  meta: UploadFileMeta;
 }
 
 export interface QuotaView {
@@ -42,21 +45,15 @@ export interface QuotaView {
   reset: string;
 }
 
-export interface ProfileView {
-  name: string;
-  email: string;
-  initials: string;
-  pilot: string;
+export interface StudioPrefs {
+  defaultLanguage: "id" | "en" | "auto";
+  defaultDiarization: boolean;
+  defaultSpeakers: number;
+  defaultExportFormat: "txt" | "srt" | "vtt" | "docx";
+  includeSpeakerLabels: boolean;
 }
 
-export interface ConsentView {
-  version: string;
-  given: string;
-}
-
-export interface NoticeOptions {
-  pending?: PendingUpload | null;
-}
+export type InputMode = "upload" | "record";
 
 export interface Studio {
   theme: "dark" | "light";
@@ -66,11 +63,16 @@ export interface Studio {
   navigate: (view: "home" | "library" | "insights" | "settings") => void;
   goJob: (id: string) => void;
 
+  inputMode: InputMode;
+  setInputMode: (mode: InputMode) => void;
+  startNewUpload: () => void;
+  startNewRecording: () => void;
+
   me: Me | null;
-  profile: ProfileView;
   quota: QuotaView;
-  consent: ConsentView | null;
-  consentGiven: boolean;
+
+  prefs: StudioPrefs;
+  updatePrefs: (patch: Partial<StudioPrefs>) => void;
 
   jobs: JobSummary[];
   refreshData: () => void;
@@ -80,6 +82,7 @@ export interface Studio {
 
   upload: UploadState;
   startUpload: (file: File, meta: UploadFileMeta) => void;
+  resumeUpload: () => void;
   cancelUpload: (force?: boolean) => void;
 
   query: string;
@@ -90,11 +93,6 @@ export interface Studio {
   selectJob: (id: string, title: string) => void;
 
   toast: (message: string) => void;
-
-  openNotice: (options?: NoticeOptions) => void;
-  openGrant: () => void;
-  onAgreeConsent: () => void;
-  onWithdrawConsent: () => void;
 }
 
 /** Kartu ringkas untuk hasil pencarian. */
@@ -115,8 +113,27 @@ export function useStudio(): Studio {
   return ctx;
 }
 
-export const IDLE_UPLOAD: UploadState = { phase: "idle", progress: 0, fileMeta: null, stage: null, jobId: null, error: null };
+export const IDLE_UPLOAD: UploadState = {
+  phase: "idle",
+  progress: 0,
+  partsDone: 0,
+  partsTotal: 0,
+  fileMeta: null,
+  stage: null,
+  jobId: null,
+  queuePosition: null,
+  eta: null,
+  canResume: false,
+  error: null,
+};
+
+export const DEFAULT_PREFS: StudioPrefs = {
+  defaultLanguage: "id",
+  defaultDiarization: false,
+  defaultSpeakers: 2,
+  defaultExportFormat: "txt",
+  includeSpeakerLabels: true,
+};
 
 export const DAILY_MINUTES = 60;
 export const MAX_ACTIVE = 2;
-export const CONSENT_VERSION = "1.2";

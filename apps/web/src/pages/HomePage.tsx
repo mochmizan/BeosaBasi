@@ -1,5 +1,15 @@
 import { useMemo } from "react";
-import { ArrowUpRight, CalendarDays, Clock, FileAudio, ShieldCheck, Sparkles, Users } from "lucide-react";
+import {
+  ArrowUpRight,
+  CalendarDays,
+  Clock,
+  FileAudio,
+  FileUp,
+  Lock,
+  Mic,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import Uploader from "../components/Uploader";
 import Transcript, { type TranscriptJob } from "../components/Transcript";
 import Waveform from "../components/Waveform";
@@ -14,14 +24,19 @@ export default function HomePage() {
     jobs,
     upload,
     quota,
+    prefs,
+    inputMode,
+    setInputMode,
+    startNewRecording,
+    startNewUpload,
     workerOnline,
     refreshHealth,
     startUpload,
+    resumeUpload,
     cancelUpload,
     goJob,
     navigate,
     toast,
-    openNotice,
     activeId,
     selectJob,
   } = useStudio();
@@ -34,8 +49,17 @@ export default function HomePage() {
     return completed?.job_id ?? jobs[0]?.job_id ?? null;
   }, [activeId, jobs]);
 
-  const { detail, transcript, audioUrl, editSegment, reassign, renameSpeaker, exportAs, deleteJob } =
-    useJobTranscript(featuredId);
+  const {
+    detail,
+    transcript,
+    audioUrl,
+    saveStatus,
+    editSegment,
+    reassign,
+    renameSpeaker,
+    exportAs,
+    deleteJob,
+  } = useJobTranscript(featuredId);
 
   const job: TranscriptJob | null = useMemo(() => {
     if (detail === null) return null;
@@ -76,14 +100,15 @@ export default function HomePage() {
       <div className="page-head home-head">
         <div>
           <div className="eyebrow">
-            <span className="eyebrow-dot" /> Studio
+            <span className="eyebrow-dot" /> Studio Transkripsi
           </div>
           <h1 className="hero-title">
             Beo digital penyalin suara jadi teks, <em>tanpa basa-basi.</em>
           </h1>
           <p className="page-sub">
-            Kirim audio rapat, kuliah, atau pesan suara. Whisper large-v3-turbo mengubahnya jadi
-            transkrip Bahasa Indonesia yang bisa diedit dan diekspor.
+            Rekam langsung dari mikrofon atau unggah berkas audio/video. Whisper large-v3-turbo
+            mengubahnya jadi transkrip Bahasa Indonesia berpenanda waktu yang siap disunting dan
+            diekspor — langsung tanpa akun.
           </p>
         </div>
         <div className="head-side">
@@ -104,12 +129,15 @@ export default function HomePage() {
         <Uploader
           upload={upload}
           quota={quota}
+          prefs={prefs}
+          inputMode={inputMode}
+          onChangeMode={setInputMode}
           workerOnline={workerOnline}
           onRefreshWorker={refreshHealth}
           onPickFile={startUpload}
+          onResumeUpload={resumeUpload}
           onCancelUpload={cancelUpload}
           onOpenJob={goJob}
-          onOpenConsent={() => openNotice()}
           onToast={toast}
         />
 
@@ -119,6 +147,7 @@ export default function HomePage() {
             segments={parsed.segments}
             speakers={parsed.speakers}
             audioUrl={audioUrl}
+            saveStatus={saveStatus}
             onEditSegment={editSegment}
             onReassign={reassign}
             onRenameSpeaker={renameSpeaker}
@@ -134,73 +163,86 @@ export default function HomePage() {
                 <span className="job-state-icon is-slate">
                   <FileAudio size={26} />
                 </span>
-                <h3>Belum ada transkrip</h3>
-                <p>Unggah berkas audio pertamamu — hasilnya muncul di sini.</p>
+                <h3>Belum ada transkrip aktif</h3>
+                <p>
+                  Rekam suara langsung dari mikrofon atau pilih berkas audio/video di panel sebelah —
+                  hasil transkrip berpenanda waktu akan tampil di sini.
+                </p>
+                <div className="job-state-actions">
+                  <button className="btn btn-primary btn-sm" onClick={startNewRecording}>
+                    <Mic size={14} /> Rekam suara
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={startNewUpload}>
+                    <FileUp size={14} /> Unggah berkas
+                  </button>
+                </div>
               </div>
             </div>
           </section>
         )}
       </div>
 
-      <section className="recent-strip">
-        <div className="strip-head">
-          <div>
-            <h3>Job terakhir</h3>
-            <p>Status unggahan, antrean, dan hasil transkrip.</p>
+      {recent.length > 0 ? (
+        <section className="recent-strip">
+          <div className="strip-head">
+            <div>
+              <h3>Job terakhir</h3>
+              <p>Status unggahan, antrean, dan hasil transkrip terbaru di peramban ini.</p>
+            </div>
+            <button className="link-btn" onClick={() => navigate("library")}>
+              Buka pustaka <ArrowUpRight size={13} />
+            </button>
           </div>
-          <button className="link-btn" onClick={() => navigate("library")}>
-            Buka pustaka <ArrowUpRight size={13} />
-          </button>
-        </div>
 
-        <div className="strip-grid">
-          {recent.map((item) => {
-            const meta = statusMeta(item.status);
-            return (
-              <button
-                key={item.id}
-                className="strip-card"
-                onClick={() => selectJob(item.id, item.title)}
-              >
-                <span className={`strip-icon tone-${meta.tone}`}>
-                  <FileAudio size={15} />
-                </span>
-                <span className="strip-copy">
-                  <b>{item.title}</b>
-                  <span>
-                    <Clock size={11} /> {item.duration}
-                    <span className={`status-dot-mini tone-${meta.tone}`} /> {meta.label}
+          <div className="strip-grid">
+            {recent.map((item) => {
+              const meta = statusMeta(item.status);
+              return (
+                <button
+                  key={item.id}
+                  className="strip-card"
+                  onClick={() => selectJob(item.id, item.title)}
+                >
+                  <span className={`strip-icon tone-${meta.tone}`}>
+                    <FileAudio size={15} />
                   </span>
-                </span>
-                {item.status === "completed" ? (
-                  <Waveform
-                    bars={14}
-                    seed={item.id.length * 7 + 24}
-                    height={24}
-                    className="strip-wave"
-                  />
-                ) : null}
-                <span className={`status-pill is-compact tone-${meta.tone}`}>
-                  {item.diarized ? <Users size={10} /> : null}
-                  {item.status === "processing" ? "…" : meta.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+                  <span className="strip-copy">
+                    <b>{item.title}</b>
+                    <span>
+                      <Clock size={11} /> {item.duration}
+                      <span className={`status-dot-mini tone-${meta.tone}`} /> {meta.label}
+                    </span>
+                  </span>
+                  {item.status === "completed" ? (
+                    <Waveform
+                      bars={14}
+                      seed={item.id.length * 7 + 24}
+                      height={24}
+                      className="strip-wave"
+                    />
+                  ) : null}
+                  <span className={`status-pill is-compact tone-${meta.tone}`}>
+                    {item.diarized ? <Users size={10} /> : null}
+                    {item.status === "processing" ? "…" : meta.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <section className="home-banner">
         <div className="banner-glow" />
         <span className="banner-badge">
-          <ShieldCheck size={12} /> Privasi
+          <Lock size={12} /> Tanpa Akun
         </span>
         <p>
-          Audio dihapus otomatis dalam <em>24 jam</em>, transkrip tersimpan <em>30 hari</em>. Audio
-          dan transkrip tidak pernah dipakai untuk melatih model.
+          Langsung pakai tanpa registrasi. Audio dihapus otomatis dalam <em>24 jam</em>, transkrip
+          tersimpan <em>30 hari</em> di sesi peramban ini, dan tidak pernah dipakai melatih model.
         </p>
-        <button className="link-btn" onClick={() => openNotice()}>
-          Baca pemberitahuan <ArrowUpRight size={13} />
+        <button className="link-btn" onClick={() => navigate("settings")}>
+          Kelola sesi <ArrowUpRight size={13} />
         </button>
       </section>
     </div>

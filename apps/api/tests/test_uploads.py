@@ -168,3 +168,32 @@ def test_storage_object_key_has_no_filename(client, storage):
     assert len(keys) == 1
     assert "rahasia" not in keys[0]
     assert keys[0].startswith("uploads/")
+
+
+
+def test_accepts_browser_mediarecorder_webm_with_codecs_param(client, storage):
+    webm_magic = b"\x1aE\xdf\xa3" + b"\x00" * 124
+    uploaded = upload_job(
+        client,
+        storage,
+        size=len(webm_magic),
+        filename="rekaman-suara.webm",
+        content_type="audio/webm;codecs=opus",
+        data=webm_magic,
+    )
+    assert uploaded["status"] == 200
+    assert uploaded["body"]["state"] == "queued"
+
+
+def test_session_token_header_fallback_preserves_identity(client):
+    first = client.get("/api/me")
+    assert first.status_code == 200
+    uid = first.json()["user_id"]
+    token = first.headers.get("X-Session-Token")
+    assert token
+
+    # Clear cookies to simulate cross-origin quick tunnel / mobile ITP blocking cookies
+    client.cookies.clear()
+    second = client.get("/api/me", headers={"X-Session-Token": token})
+    assert second.status_code == 200
+    assert second.json()["user_id"] == uid

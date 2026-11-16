@@ -1,5 +1,5 @@
-// Utilitas UI (port dari mockup src/jobUtils.js) — label status,
-// tahap pemrosesan, pemformat waktu, dan penyusun ekspor lokal.
+// Utilitas UI — label status, tahap pemrosesan, pemformat waktu,
+// pembacaan durasi berkas lokal, dan penyusun ekspor lokal.
 
 export type Tone = "coral" | "violet" | "mint" | "amber" | "slate";
 
@@ -51,11 +51,12 @@ export function formatClock(total: number | null | undefined): string {
 }
 
 function stamp(total: number, separator: string): string {
-  const secs = Math.max(0, Math.round(total ?? 0));
-  const h = String(Math.floor(secs / 3600)).padStart(2, "0");
-  const m = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
-  const s = String(secs % 60).padStart(2, "0");
-  return `${h}:${m}:${s}${separator}000`;
+  const wholeMs = Math.max(0, Math.round((total ?? 0) * 1000));
+  const h = String(Math.floor(wholeMs / 3600000)).padStart(2, "0");
+  const m = String(Math.floor((wholeMs % 3600000) / 60000)).padStart(2, "0");
+  const s = String(Math.floor((wholeMs % 60000) / 1000)).padStart(2, "0");
+  const ms = String(wholeMs % 1000).padStart(3, "0");
+  return `${h}:${m}:${s}${separator}${ms}`;
 }
 
 export interface UiSegment {
@@ -91,30 +92,42 @@ export interface UiJobBase {
   speakers?: UiSpeaker[];
 }
 
-export function buildTXT(job: UiJobBase, segments: UiSegment[]): string {
+export function buildTXT(
+  job: UiJobBase,
+  segments: UiSegment[],
+  includeSpeaker = true,
+): string {
   const header = `${job.title}\n${job.file} · ${job.duration} · ${job.language}\n\n`;
   const body = segments
-    .map((s) => `[${s.time}] ${s.speaker}${s.role ? ` (${s.role})` : ""}\n${s.text}`)
+    .map((s) => {
+      const spk =
+        includeSpeaker && s.speaker
+          ? ` ${s.speaker}${s.role ? ` (${s.role})` : ""}\n`
+          : " ";
+      return `[${s.time}]${spk}${s.text}`;
+    })
     .join("\n\n");
   return header + body;
 }
 
-export function buildSRT(segments: UiSegment[]): string {
+export function buildSRT(segments: UiSegment[], includeSpeaker = true): string {
   return segments
     .map((s, i) => {
       const start = s.start || 0;
       const end = s.end || (segments[i + 1]?.start ?? start + 6);
-      return `${i + 1}\n${stamp(start, ",")} --> ${stamp(Math.max(end, start + 1), ",")}\n${s.speaker}: ${s.text}\n`;
+      const prefix = includeSpeaker && s.speaker ? `${s.speaker}: ` : "";
+      return `${i + 1}\n${stamp(start, ",")} --> ${stamp(Math.max(end, start + 0.5), ",")}\n${prefix}${s.text}\n`;
     })
     .join("\n");
 }
 
-export function buildVTT(segments: UiSegment[]): string {
+export function buildVTT(segments: UiSegment[], includeSpeaker = true): string {
   const cues = segments
     .map((s, i) => {
       const start = s.start || 0;
       const end = s.end || (segments[i + 1]?.start ?? start + 6);
-      return `${stamp(start, ".")} --> ${stamp(Math.max(end, start + 1), ".")}\n<v ${s.speaker}>${s.text}\n`;
+      const prefix = includeSpeaker && s.speaker ? `<v ${s.speaker}>` : "";
+      return `${stamp(start, ".")} --> ${stamp(Math.max(end, start + 0.5), ".")}\n${prefix}${s.text}\n`;
     })
     .join("\n");
   return `WEBVTT\n\n${cues}`;
@@ -182,7 +195,34 @@ export function relativeDate(iso: string): string {
   );
 }
 
-export function initialsOf(name: string): string {
-  const clean = name.replace(/@.*/, "");
-  return (clean.charAt(0) || "B").toUpperCase();
+/** Baca durasi audio di browser sebagai petunjuk kuota & batas 90 menit (TK-042). */
+export function probeAudioDuration(file: File): Promise<number | null> {
+  if (typeof document === "undefined" || typeof URL === "undefined") {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    let settled = false;
+    const finish = (val: number | null) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      audio.removeAttribute("src");
+      resolve(val);
+    };
+    const timer = setTimeout(() => finish(null), 3500);
+    audio.onloadedmetadata = () => {
+      clearTimeout(timer);
+      const dur = audio.duration;
+      if (Number.isFinite(dur) && dur > 0) finish(dur);
+      else finish(null);
+    };
+    audio.onerror = () => {
+      clearTimeout(timer);
+      finish(null);
+    };
+    audio.src = url;
+  });
 }

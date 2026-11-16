@@ -1,11 +1,12 @@
 import {
   ArrowUpRight,
   BarChart3,
+  Clock,
   FileUp,
   Home,
   Library,
+  Mic,
   Settings,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import { modKey } from "../lib/platform";
@@ -15,16 +16,18 @@ import { useStudio } from "./studio";
 export default function Sidebar({
   open,
   onClose,
-  onNew,
+  onNewUpload,
+  onNewRecord,
 }: {
   open: boolean;
   onClose: () => void;
-  onNew: () => void;
+  onNewUpload: () => void;
+  onNewRecord: () => void;
 }) {
-  const { view, navigate, selectJob, jobs, profile, quota } = useStudio();
+  const { view, inputMode, navigate, selectJob, jobs, quota } = useStudio();
 
   const nav = [
-    { id: "home" as const, label: "Beranda", icon: Home },
+    { id: "home" as const, label: "Studio", icon: Home },
     { id: "library" as const, label: "Pustaka", icon: Library, count: jobs.length },
     { id: "insights" as const, label: "Pemakaian", icon: BarChart3 },
     { id: "settings" as const, label: "Pengaturan", icon: Settings },
@@ -71,19 +74,33 @@ export default function Sidebar({
             </span>
             <span className="brand-name">BEOSABASI</span>
           </button>
-          <span className="brand-beta">pilot</span>
+          <span className="brand-beta">ID · STT</span>
           <button className="icon-btn sidebar-close" onClick={onClose} aria-label="Tutup menu">
             <X size={18} />
           </button>
         </div>
 
-        <button className="new-rec" onClick={onNew}>
-          <span className="new-rec-icon">
-            <FileUp size={17} strokeWidth={2.2} />
-          </span>
-          Unggah audio
-          <kbd>{modKey}U</kbd>
-        </button>
+        <div className="side-cta-group">
+          <button
+            className={`new-rec ${view === "home" && inputMode === "record" ? "is-active-mode" : ""}`}
+            onClick={onNewRecord}
+          >
+            <span className="new-rec-icon">
+              <Mic size={16} strokeWidth={2.2} />
+            </span>
+            Rekam suara
+            <kbd>{modKey}⇧R</kbd>
+          </button>
+
+          <button
+            className={`new-upload-btn ${view === "home" && inputMode === "upload" ? "is-active-mode" : ""}`}
+            onClick={onNewUpload}
+          >
+            <FileUp size={15} strokeWidth={2} />
+            <span>Unggah berkas</span>
+            <kbd>{modKey}U</kbd>
+          </button>
+        </div>
 
         <nav className="nav" aria-label="Navigasi utama">
           {nav.map(({ id, label, icon: Icon, count }) => (
@@ -107,33 +124,37 @@ export default function Sidebar({
               Semua <ArrowUpRight size={13} />
             </button>
           </div>
-          <ul className="recent-list">
-            {recent.map((job) => {
-              const meta = statusMeta(job.status);
-              return (
-                <li key={job.id}>
-                  <button className="recent-item" onClick={() => selectJob(job.id, job.title)}>
-                    <span className={`recent-dot tone-${meta.tone}`} />
-                    <span className="recent-copy">
-                      <span className="recent-title">{job.title}</span>
-                      <span className="recent-meta">
-                        {meta.label} · {job.duration}
+          {recent.length > 0 ? (
+            <ul className="recent-list">
+              {recent.map((job) => {
+                const meta = statusMeta(job.status);
+                return (
+                  <li key={job.id}>
+                    <button className="recent-item" onClick={() => selectJob(job.id, job.title)}>
+                      <span className={`recent-dot tone-${meta.tone}`} />
+                      <span className="recent-copy">
+                        <span className="recent-title">{job.title}</span>
+                        <span className="recent-meta">
+                          {meta.label} · {job.duration}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="side-empty-note">Belum ada transkrip di sesi peramban ini.</p>
+          )}
         </div>
 
         <div className="side-bottom">
           <div className="storage-card">
             <div className="storage-top">
               <span className="storage-icon">
-                <ShieldCheck size={14} />
+                <Clock size={14} />
               </span>
-              <span>Kuota hari ini</span>
+              <span>Kuota harian</span>
               <b>
                 {used} / {total} mnt
               </b>
@@ -141,22 +162,7 @@ export default function Sidebar({
             <div className="storage-bar">
               <i style={{ width: `${percent}%` }} />
             </div>
-            <p>Reset {quota.reset} · audio hapus ≤24 jam</p>
-          </div>
-
-          <div className="user-card">
-            <span className="avatar avatar-md">{profile.initials}</span>
-            <span className="user-copy">
-              <b>{profile.name}</b>
-              <span>{profile.pilot}</span>
-            </span>
-            <button
-              className="icon-btn"
-              onClick={() => navigate("settings")}
-              aria-label="Buka pengaturan"
-            >
-              <Settings size={16} />
-            </button>
+            <p>Reset {quota.reset} · langsung pakai tanpa akun</p>
           </div>
         </div>
       </aside>

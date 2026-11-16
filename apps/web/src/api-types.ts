@@ -3,6 +3,8 @@
 
 export interface Health {
   status: string;
+  /** True bila ada pekerja yang berdetak dalam 90 detik terakhir */
+  worker_active?: boolean;
 }
 
 export interface Error {

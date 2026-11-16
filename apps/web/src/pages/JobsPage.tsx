@@ -3,11 +3,13 @@ import {
   ArrowUpRight,
   Clock,
   FileAudio,
+  FileUp,
   Globe2,
   Loader2,
+  Lock,
+  Mic,
   Play,
   Search,
-  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -25,7 +27,7 @@ const FILTERS = [
 ];
 
 export default function JobsPage() {
-  const { jobs, query, setQuery, goJob } = useStudio();
+  const { jobs, query, setQuery, goJob, startNewRecording, startNewUpload, workerOnline } = useStudio();
   const [filter, setFilter] = useState("all");
   const [format, setFormat] = useState("Semua");
 
@@ -104,7 +106,7 @@ export default function JobsPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari judul, berkas, pembicara…"
+              placeholder="Cari judul, berkas, bahasa…"
               aria-label="Filter pustaka"
             />
           </div>
@@ -140,8 +142,8 @@ export default function JobsPage() {
                 />
                 <span className="format-badge">{job.format}</span>
                 <span className={`status-pill is-overlay tone-${meta.tone}`}>
-                  {job.status === "processing" ? <Loader2 size={10} /> : <i />}
-                  {meta.label}
+                  {job.status === "processing" ? <Loader2 size={10} className="spin" /> : <i />}
+                  {job.status === "queued" && !workerOnline ? "Tertunda" : meta.label}
                 </span>
                 <span className="duration">
                   <Clock size={11} /> {job.duration}
@@ -162,7 +164,9 @@ export default function JobsPage() {
 
               <div className="rec-card-body">
                 <div className="rec-card-top">
-                  <span className={`tag tag-${meta.tone}`}>{meta.label}</span>
+                  <span className={`tag tone-${meta.tone}`}>
+                    {job.status === "queued" && !workerOnline ? "Pemrosesan tertunda" : meta.label}
+                  </span>
                   <span className="rec-date">{job.date}</span>
                 </div>
                 <h3>{job.title}</h3>
@@ -171,7 +175,11 @@ export default function JobsPage() {
                 </p>
 
                 {job.status === "queued" ? (
-                  <p className="card-note is-amber">Menunggu pekerja transkripsi.</p>
+                  <p className="card-note is-amber">
+                    {workerOnline
+                      ? "Menunggu giliran pekerja transkripsi."
+                      : "Perangkat pekerja offline — job aman di antrean."}
+                  </p>
                 ) : null}
 
                 {job.status === "failed" || job.status === "expired" ? (
@@ -180,7 +188,7 @@ export default function JobsPage() {
 
                 <div className="rec-card-foot">
                   <span>
-                    <Users size={12} /> {job.diarized ? "diarisasi" : "—"}
+                    <Users size={12} /> {job.diarized ? "diarisasi" : "1 pembicara"}
                   </span>
                   <span>
                     <Globe2 size={12} /> {job.language}
@@ -191,7 +199,7 @@ export default function JobsPage() {
                     </span>
                   ) : (
                     <span className="rec-acc is-muted">
-                      <ShieldCheck size={12} /> audio ≤24 jam
+                      <Lock size={12} /> audio ≤24 jam
                     </span>
                   )}
                   <ArrowUpRight size={14} className="rec-open" />
@@ -207,18 +215,35 @@ export default function JobsPage() {
           <div className="empty-icon">
             <Search size={22} />
           </div>
-          <h3>Belum ada yang cocok</h3>
-          <p>Coba kata kunci atau filter lain untuk melihat job yang tersimpan.</p>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => {
-              setFilter("all");
-              setFormat("Semua");
-              setQuery("");
-            }}
-          >
-            Reset filter
-          </button>
+          <h3>{uiJobs.length === 0 ? "Belum ada job di pustaka" : "Tidak ada job yang cocok"}</h3>
+          <p>
+            {uiJobs.length === 0
+              ? "Mulai dengan merekam suara dari mikrofon atau mengunggah berkas audio/video."
+              : "Coba kata kunci atau filter status lain untuk melihat job yang tersimpan."}
+          </p>
+          <div className="done-actions">
+            {uiJobs.length === 0 ? (
+              <>
+                <button className="btn btn-primary btn-sm" onClick={startNewRecording}>
+                  <Mic size={14} /> Rekam suara
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={startNewUpload}>
+                  <FileUp size={14} /> Unggah berkas
+                </button>
+              </>
+            ) : (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setFilter("all");
+                  setFormat("Semua");
+                  setQuery("");
+                }}
+              >
+                Reset filter
+              </button>
+            )}
+          </div>
         </div>
       ) : null}
     </div>
