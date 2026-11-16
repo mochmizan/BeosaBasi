@@ -11,6 +11,7 @@ services:
     build:
       context: ../src/apps/api
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       BEOSABASI_DB_PATH: /data/beosabasi.db
       BEOSABASI_COOKIE_SECURE: "0"
@@ -35,6 +36,7 @@ services:
 
   s3:
     image: dxflrs/garage:v2.3.0
+    restart: unless-stopped
     command: ["/garage", "-c", "/etc/garage.toml", "server"]
     ports:
       - "127.0.0.1:3900:3900"

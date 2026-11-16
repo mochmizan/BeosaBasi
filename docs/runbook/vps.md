@@ -41,6 +41,23 @@ karena `/home/ubuntu` tak terbaca oleh `beosabasi`):
 7. Asap: `upload → PUT presigned → complete → claim` hijau;
    e2e penuh (transkripsi tiny + baca transkrip) hijau.
 
+## Tunnel berganti (quick tunnel tidak stabil)
+
+Quick tunnel Cloudflare berganti URL tiap restart. Prosedurnya otomatis:
+
+- **Di VPS:** `/opt/beosabasi/vps-refresh.sh` (sebagai `beosabasi`)
+  mematikan + menyalakan ulang 3 tunnel (s3/api/web), menulis
+  `S3_ENDPOINT` baru ke `.env`, me-recreate `api`, menunggu `/healthz`,
+  mencetak 3 URL baru. Terpasang juga di cron `@reboot`
+  (`refresh-boot.log`) + kontainer `restart: unless-stopped`,
+  jadi reboot memulihkan API+S3+tunnel tanpa tindakan manual.
+- **Di laptop:** `.\scripts\refresh-web.ps1` membaca URL API baru,
+  rebuild web (`VITE_API_BASE_URL` dibakar), deploy ke
+  `/opt/beosabasi/app`, cek web 200.
+
+Urutan setelah reboot / URL mati: tunggu ±1 menit (cron `@reboot`
+sleep 30), lalu jalankan `.\scripts\refresh-web.ps1` dari repo.
+
 ## Operasi harian
 
 - Status: `docker compose -f vps/compose.yaml ps` (dengan
